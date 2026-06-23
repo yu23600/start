@@ -1,4 +1,4 @@
-# v6 - 众包打标机制
+# v7 - 置信度警告横幅
 services:
   - type: web
     name: cafeteria-recommender

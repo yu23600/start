@@ -953,12 +953,30 @@ function showDishReviewStep() {
     document.getElementById('fetcherStep2').style.display = 'block';
 
     const confMap = { high: '高', medium: '中', low: '低', unknown: '未知' };
+    const conf = fetchResultInfo.confidence || 'unknown';
     const infoDiv = document.getElementById('fetcherResultInfo');
+
+    // 根据置信度设置样式类和警告内容
+    const confStyles = {
+        high:   { cls: 'confidence-high',   icon: '✅', label: '数据可靠' },
+        medium: { cls: 'confidence-medium', icon: '📋', label: '建议核实' },
+        low:    { cls: 'confidence-low',    icon: '⚠️', label: '数据可能不准' },
+        unknown:{ cls: 'confidence-low',    icon: '❓', label: '数据来源未知' }
+    };
+    const cs = confStyles[conf] || confStyles.unknown;
+
+    // 移除旧的置信度类
+    infoDiv.classList.remove('confidence-high', 'confidence-medium', 'confidence-low');
+    infoDiv.classList.add(cs.cls);
+
     infoDiv.innerHTML = `
-        <p><strong>数据来源:</strong> ${fetchResultInfo.source_desc || '未知'}</p>
-        <p><strong>置信度:</strong> ${confMap[fetchResultInfo.confidence] || fetchResultInfo.confidence || '未知'}
-           | <strong>共 ${fetchedDishes.length} 道菜品</strong></p>
-        ${fetchResultInfo.note ? `<p style="color:#e67e22;margin-top:5px;">️ ${fetchResultInfo.note}</p>` : ''}
+        <div class="confidence-header">
+            <span class="confidence-icon">${cs.icon}</span>
+            <span><strong>置信度: ${confMap[conf] || conf}</strong> — ${cs.label}</span>
+            <span style="margin-left:auto;">共 ${fetchedDishes.length} 道菜品</span>
+        </div>
+        <div class="confidence-source">数据来源: ${fetchResultInfo.source_desc || '未知'}</div>
+        ${fetchResultInfo.note ? `<div class="confidence-note">${fetchResultInfo.note}</div>` : ''}
     `;
 
     renderDishChecklist();

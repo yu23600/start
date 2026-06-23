@@ -915,14 +915,22 @@ def api_fetch_dishes():
 
     if school_name in CURATED_DATABASE:
         info = CURATED_DATABASE[school_name]
+        # 根据置信度返回不同提示文案
+        conf = info["confidence"]
+        if conf == "low":
+            note = "⚠️ 该学校数据置信度较低，菜品列表可能不准确，建议核实后再保存"
+        elif conf == "medium":
+            note = "📋 数据来自公开文章整理，可能存在时效性偏差，建议快速浏览确认"
+        else:
+            note = "✅ 数据置信度高，来源可靠且经过时效性校验"
         return jsonify({
             "success": True,
             "school": school_name,
             "dishes": info["dishes"],
             "source": "curated",
             "source_desc": info["source"],
-            "confidence": info["confidence"],
-            "note": "数据来自公开文章整理，建议核实",
+            "confidence": conf,
+            "note": note,
             "dish_count": len(info["dishes"])
         })
 

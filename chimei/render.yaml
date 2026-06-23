@@ -1,4 +1,4 @@
-# v10 - 打卡登录：昵称+密码+自动登录
+# v11 - 全国高校食堂图鉴
 services:
   - type: web
     name: cafeteria-recommender

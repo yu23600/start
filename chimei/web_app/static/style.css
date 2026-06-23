@@ -1287,3 +1287,113 @@ body {
         font-size: 0.8em;
     }
 }
+
+/* ========== 高校食堂图鉴 ========== */
+.gallery-modal-content {
+    max-width: 900px;
+    max-height: 90vh;
+    overflow-y: auto;
+    padding: 25px 20px;
+}
+
+.gallery-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 16px;
+    padding-bottom: 10px;
+}
+
+.gallery-card {
+    background: #fff;
+    border-radius: 12px;
+    padding: 16px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+    border: 1px solid #f0f0f0;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.gallery-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.12);
+}
+
+.gallery-school-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.gallery-school-name {
+    font-size: 1.05em;
+    font-weight: bold;
+    color: #2c3e50;
+}
+
+.gallery-confidence {
+    font-size: 0.7em;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-weight: bold;
+    white-space: nowrap;
+}
+
+.gallery-confidence-high {
+    background: #e8f5e9;
+    color: #2e7d32;
+}
+
+.gallery-confidence-medium {
+    background: #fff3e0;
+    color: #e65100;
+}
+
+.gallery-confidence-low {
+    background: #ffebee;
+    color: #c62828;
+}
+
+.gallery-dishes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 10px;
+    max-height: 160px;
+    overflow-y: auto;
+}
+
+.gallery-dish-tag {
+    font-size: 0.78em;
+    padding: 3px 10px;
+    border-radius: 12px;
+    background: #f0f4ff;
+    color: #5c6bc0;
+    white-space: nowrap;
+    border: 1px solid #e8eaf6;
+}
+
+.gallery-source {
+    font-size: 0.72em;
+    color: #bbb;
+    line-height: 1.4;
+    border-top: 1px solid #f5f5f5;
+    padding-top: 8px;
+}
+
+/* 移动端图鉴 */
+@media (max-width: 640px) {
+    .gallery-grid {
+        grid-template-columns: 1fr;
+        gap: 12px;
+    }
+
+    .gallery-modal-content {
+        padding: 20px 15px;
+    }
+
+    .gallery-dishes {
+        max-height: 120px;
+    }
+}

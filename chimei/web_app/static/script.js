@@ -1783,3 +1783,68 @@ function renderReport(data) {
 
     content.innerHTML = html;
 }
+
+// ========== 高校食堂图鉴 ==========
+async function showGallery() {
+    const modal = document.getElementById('galleryModal');
+    const loading = document.getElementById('galleryLoading');
+    const grid = document.getElementById('galleryGrid');
+
+    modal.classList.add('show');
+    loading.style.display = '';
+    grid.style.display = 'none';
+
+    try {
+        const resp = await fetch('/api/curated-database');
+        const data = await resp.json();
+        if (data.success) {
+            document.getElementById('gallerySchoolCount').textContent = data.count;
+            renderGallery(data.schools);
+            loading.style.display = 'none';
+            grid.style.display = '';
+        } else {
+            loading.textContent = '加载失败';
+        }
+    } catch (e) {
+        console.error('加载图鉴失败:', e);
+        loading.textContent = '网络错误，请重试';
+    }
+}
+
+function closeGallery() {
+    document.getElementById('galleryModal').classList.remove('show');
+}
+
+function renderGallery(schools) {
+    const grid = document.getElementById('galleryGrid');
+    const confLabels = { high: '高', medium: '中', low: '低' };
+    const confClasses = { high: 'gallery-confidence-high', medium: 'gallery-confidence-medium', low: 'gallery-confidence-low' };
+
+    let html = '';
+    for (const [name, info] of Object.entries(schools)) {
+        const dishes = info.dishes || [];
+        const source = info.source || '';
+        const confidence = info.confidence || 'medium';
+
+        html += `<div class="gallery-card">
+            <div class="gallery-school-header">
+                <span class="gallery-school-name">${name}</span>
+                <span class="gallery-confidence ${confClasses[confidence] || ''}">${confLabels[confidence] || '中'}</span>
+            </div>
+            <div class="gallery-dishes">`;
+
+        for (const dish of dishes) {
+            html += `<span class="gallery-dish-tag">${dish}</span>`;
+        }
+
+        html += `</div>`;
+
+        if (source) {
+            html += `<div class="gallery-source">${source}</div>`;
+        }
+
+        html += `</div>`;
+    }
+
+    grid.innerHTML = html;
+}

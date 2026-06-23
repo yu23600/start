@@ -600,6 +600,16 @@ def get_universities():
         return jsonify({"universities": []}), 404
 
 
+@app.route('/api/curated-database', methods=['GET'])
+def get_curated_database():
+    """返回精选菜品数据库（食堂图鉴）"""
+    return jsonify({
+        "success": True,
+        "schools": CURATED_DATABASE,
+        "count": len(CURATED_DATABASE)
+    })
+
+
 # ========== 菜品管理 API ==========
 @app.route('/api/schools', methods=['GET'])
 def get_schools():

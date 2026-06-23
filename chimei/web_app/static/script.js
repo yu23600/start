@@ -68,11 +68,22 @@ function checkFirstTimeUse() {
     if (!hasSchool) {
         // 首次使用，显示向导
         showSchoolWizard();
+        // 学校向导关闭后再触发登录（延迟检查）
+        const wizardTimer = setInterval(() => {
+            if (!document.getElementById('schoolWizardModal').classList.contains('show')) {
+                clearInterval(wizardTimer);
+                if (localStorage.getItem('current_school')) {
+                    currentSchool = localStorage.getItem('current_school');
+                    startupMealLogin();
+                }
+            }
+        }, 500);
     } else {
         // 非首次使用，加载学校
         currentSchool = hasSchool;
         updateSchoolDisplay();
         loadMenu();
+        startupMealLogin(); // 应用启动时弹出登录
     }
 }
 
@@ -1428,6 +1439,23 @@ async function tryAutoLogin() {
     return null;
 }
 
+async function startupMealLogin() {
+    // 1. 尝试自动登录
+    if (isAutoLogin()) {
+        const user = await tryAutoLogin();
+        if (user) {
+            updateMealUserDisplay();
+            return;
+        }
+    }
+    // 2. 没有自动登录凭据或自动登录失败 → 弹出登录弹窗
+    //    用户可以选择取消（跳过登录）
+    const user = await showMealLoginDialog();
+    if (user) {
+        updateMealUserDisplay();
+    }
+}
+
 function updateMealUserDisplay() {
     const user = getMealUser();
     const el = document.getElementById('mealUserDisplay');
@@ -1449,21 +1477,12 @@ async function showMealCheckin() {
         return;
     }
 
-    // 1. 尝试自动登录
+    // 检查是否已登录（启动时应该已经登录过了）
     let user = getMealUser();
-    if (isAutoLogin() && user) {
-        const autoUser = await tryAutoLogin();
-        if (autoUser) {
-            user = autoUser;
-        } else {
-            user = ''; // 自动登录失败，需要重新登录
-        }
-    }
-
-    // 2. 如果没有用户，弹出登录/注册弹窗
     if (!user) {
+        // 启动时跳过了登录，现在需要登录才能打卡
         user = await showMealLoginDialog();
-        if (!user) return; // 用户取消了
+        if (!user) return;
     }
 
     document.getElementById('mealCheckinModal').classList.add('show');

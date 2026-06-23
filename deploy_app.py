@@ -31,12 +31,7 @@ CORS(app)
 DATA_FILE = os.path.join(BASE_DIR, 'chimei', 'cafeteria_data.json')
 
 # ========== 主食/通用词汇过滤 ==========
-STAPLE_FOODS = {
-    "米饭", "馒头", "花卷", "面条", "包子", "饺子", "馄饨",
-    "白粥", "稀饭", "小米粥", "八宝粥",
-    "面包", "蛋糕", "饼干",
-    "炒饭", "炒面", "炒粉",
-}
+STAPLE_FOODS = {"米饭", "面条"}
 
 def filter_staples(items):
     """过滤掉主食和通用词汇"""

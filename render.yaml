@@ -1,3 +1,4 @@
+# v2 - redeploy with data export/import
 services:
   - type: web
     name: cafeteria-recommender

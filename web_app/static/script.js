@@ -153,13 +153,17 @@ function showAddSchoolDialog() {
                 
                 const data = await response.json();
                 
-                if (data.success) {
+                if (data.success || response.status === 400) {
                     await loadSchools();
                     document.getElementById('schoolSelect').value = schoolName;
                     currentSchool = schoolName;
                     document.getElementById('menuText').value = '';
                     document.getElementById('itemCount').textContent = '(0 项)';
-                    showNotification(`学校 '${schoolName}' 创建成功！`, 'success');
+                    if (data.success) {
+                        showNotification(`学校 '${schoolName}' 创建成功！`, 'success');
+                    } else {
+                        showNotification(`学校 '${schoolName}' 已存在，已切换到该学校`, 'info');
+                    }
                 } else {
                     showNotification(data.message, 'error');
                 }
@@ -877,7 +881,8 @@ async function downloadFromCloud() {
                     body: JSON.stringify({ school_name: schoolName })
                 });
                 
-                if (addResponse.ok) {
+                // 200=新建成功, 400=已存在（也算成功）
+                if (addResponse.ok || addResponse.status === 400) {
                     // 保存菜单内容
                     await fetch(`/api/menu/${encodeURIComponent(schoolName)}`, {
                         method: 'POST',

@@ -20,6 +20,8 @@ import random
 import re
 import time
 import datetime
+import hashlib
+import secrets
 
 # ========== 基础路径配置 ==========
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -33,6 +35,7 @@ CORS(app)
 DATA_FILE = os.path.join(BASE_DIR, 'cafeteria_data.json')
 USER_TAGS_FILE = os.path.join(BASE_DIR, 'user_dish_tags.json')
 MEAL_LOGS_FILE = os.path.join(BASE_DIR, 'meal_logs.json')
+MEAL_USERS_FILE = os.path.join(BASE_DIR, 'meal_users.json')
 
 # ========== 营养规则库 ==========
 NUTRITION_RULES = {
@@ -307,6 +310,45 @@ def save_meal_logs(logs):
     except Exception as e:
         print(f"保存打卡记录出错: {e}")
         return False
+
+
+# ========== 打卡用户管理 ==========
+def load_meal_users():
+    """加载打卡用户列表"""
+    if not os.path.exists(MEAL_USERS_FILE):
+        return {}
+    try:
+        with open(MEAL_USERS_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return data if isinstance(data, dict) else {}
+    except Exception as e:
+        print(f"加载打卡用户出错: {e}")
+        return {}
+
+
+def save_meal_users(users):
+    """保存打卡用户列表"""
+    try:
+        with open(MEAL_USERS_FILE, "w", encoding="utf-8") as f:
+            json.dump(users, f, ensure_ascii=False, indent=2)
+        return True
+    except Exception as e:
+        print(f"保存打卡用户出错: {e}")
+        return False
+
+
+def hash_password(password, salt=None):
+    """对密码加盐哈希"""
+    if salt is None:
+        salt = secrets.token_hex(8)
+    h = hashlib.sha256((salt + password).encode('utf-8')).hexdigest()
+    return h, salt
+
+
+def verify_password(password, stored_hash, salt):
+    """验证密码"""
+    h, _ = hash_password(password, salt)
+    return h == stored_hash
 
 
 # ========== 精选菜品数据库 ==========
@@ -1046,6 +1088,69 @@ def get_all_dish_tags():
         "tags": user_tags,
         "count": len(user_tags)
     })
+
+
+# ========== 打卡用户认证 API ==========
+@app.route('/api/meal-user/register', methods=['POST'])
+def register_meal_user():
+    """注册新的打卡用户"""
+    data = request.json or {}
+    username = data.get('username', '').strip()
+    password = data.get('password', '').strip()
+
+    if not username or not password:
+        return jsonify({"success": False, "message": "昵称和密码不能为空"}), 400
+    if len(username) > 12:
+        return jsonify({"success": False, "message": "昵称最多12个字符"}), 400
+    if len(password) < 4:
+        return jsonify({"success": False, "message": "密码至少4位"}), 400
+
+    users = load_meal_users()
+    if username in users:
+        return jsonify({"success": False, "message": "该昵称已被注册"}), 400
+
+    pw_hash, salt = hash_password(password)
+    users[username] = {
+        "password_hash": pw_hash,
+        "salt": salt,
+        "created_at": datetime.datetime.now().isoformat()
+    }
+
+    if save_meal_users(users):
+        return jsonify({"success": True, "message": f"注册成功，欢迎 {username}！", "username": username})
+    else:
+        return jsonify({"success": False, "message": "保存失败"}), 500
+
+
+@app.route('/api/meal-user/login', methods=['POST'])
+def login_meal_user():
+    """打卡用户登录"""
+    data = request.json or {}
+    username = data.get('username', '').strip()
+    password = data.get('password', '').strip()
+
+    if not username or not password:
+        return jsonify({"success": False, "message": "请输入昵称和密码"}), 400
+
+    users = load_meal_users()
+    if username not in users:
+        return jsonify({"success": False, "message": "用户不存在"}), 404
+
+    user = users[username]
+    if not verify_password(password, user.get('password_hash', ''), user.get('salt', '')):
+        return jsonify({"success": False, "message": "密码错误"}), 401
+
+    return jsonify({"success": True, "message": f"欢迎回来，{username}！", "username": username})
+
+
+@app.route('/api/meal-user/check', methods=['GET'])
+def check_meal_user():
+    """检查用户名是否已存在"""
+    username = request.args.get('username', '').strip()
+    if not username:
+        return jsonify({"exists": False})
+    users = load_meal_users()
+    return jsonify({"exists": username in users})
 
 
 # ========== 三餐打卡 API ==========

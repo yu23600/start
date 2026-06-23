@@ -1239,45 +1239,193 @@ function setMealUser(name) {
     localStorage.setItem('meal_user', name.trim());
 }
 
-function promptMealUser() {
+function clearMealAuth() {
+    localStorage.removeItem('meal_user');
+    localStorage.removeItem('meal_pwd');
+    localStorage.removeItem('meal_auto_login');
+}
+
+function isAutoLogin() {
+    return localStorage.getItem('meal_auto_login') === 'true' && localStorage.getItem('meal_pwd');
+}
+
+function showMealLoginDialog() {
     return new Promise((resolve) => {
-        const existing = getMealUser();
+        let mode = 'login'; // 'login' or 'register'
+        const existingUser = getMealUser();
+
         const overlay = document.createElement('div');
+        overlay.id = 'mealLoginOverlay';
         overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:10000;display:flex;align-items:center;justify-content:center;';
-        overlay.innerHTML = `
-            <div style="background:#fff;border-radius:16px;padding:30px;max-width:360px;width:90%;box-shadow:0 10px 40px rgba(0,0,0,0.2);">
-                <h3 style="margin:0 0 8px;color:#667eea;text-align:center;">👤 设置昵称</h3>
-                <p style="margin:0 0 16px;color:#999;text-align:center;font-size:0.9em;">输入你的昵称，打卡记录将与你绑定</p>
-                <input type="text" id="mealUserInput" class="form-control" placeholder="请输入昵称..." value="${existing}" style="margin-bottom:16px;">
-                <div style="display:flex;gap:10px;">
-                    <button id="mealUserCancelBtn" class="btn btn-secondary" style="flex:1;">取消</button>
-                    <button id="mealUserConfirmBtn" class="btn btn-primary" style="flex:1;">确认</button>
-                </div>
-            </div>`;
-        document.body.appendChild(overlay);
 
-        const input = overlay.querySelector('#mealUserInput');
-        input.focus();
-        input.select();
+        function renderDialog() {
+            const isLogin = mode === 'login';
+            overlay.innerHTML = `
+                <div style="background:#fff;border-radius:16px;padding:30px;max-width:380px;width:90%;box-shadow:0 10px 40px rgba(0,0,0,0.2);">
+                    <h3 style="margin:0 0 6px;color:#667eea;text-align:center;">${isLogin ? '🔑 登录' : '📝 注册'}</h3>
+                    <p style="margin:0 0 18px;color:#999;text-align:center;font-size:0.85em;">${isLogin ? '输入昵称和密码登录' : '创建新的打卡账号'}</p>
+                    <div id="loginError" style="display:none;color:#e74c3c;text-align:center;font-size:0.85em;margin-bottom:10px;"></div>
+                    <input type="text" id="loginUsername" class="form-control" placeholder="昵称（最多12字）" value="${existingUser}" style="margin-bottom:10px;" maxlength="12">
+                    <input type="password" id="loginPassword" class="form-control" placeholder="密码${isLogin ? '' : '（至少4位）'}" style="margin-bottom:${isLogin ? '10px' : '10px'};">
+                    ${isLogin ? '' : '<input type="password" id="loginPassword2" class="form-control" placeholder="确认密码" style="margin-bottom:10px;">'}
+                    ${isLogin ? `<label style="display:flex;align-items:center;gap:6px;font-size:0.85em;color:#666;margin-bottom:12px;cursor:pointer;">
+                        <input type="checkbox" id="autoLoginCheck" ${localStorage.getItem('meal_auto_login') === 'true' ? 'checked' : ''}> 自动登录（下次自动进入）
+                    </label>` : ''}
+                    <div style="display:flex;gap:10px;margin-bottom:14px;">
+                        <button id="loginCancelBtn" class="btn btn-secondary" style="flex:1;">取消</button>
+                        <button id="loginSubmitBtn" class="btn btn-primary" style="flex:1;">${isLogin ? '登录' : '注册'}</button>
+                    </div>
+                    <div style="text-align:center;font-size:0.85em;">
+                        ${isLogin
+                            ? '还没有账号？<a href="#" id="switchToRegister" style="color:#667eea;">立即注册</a>'
+                            : '已有账号？<a href="#" id="switchToLogin" style="color:#667eea;">去登录</a>'}
+                    </div>
+                </div>`;
 
-        overlay.querySelector('#mealUserCancelBtn').onclick = () => {
-            document.body.removeChild(overlay);
-            resolve(null);
-        };
-        overlay.querySelector('#mealUserConfirmBtn').onclick = () => {
-            const val = input.value.trim();
-            document.body.removeChild(overlay);
-            if (val) {
-                setMealUser(val);
-                resolve(val);
-            } else {
+            // 绑定事件
+            overlay.querySelector('#loginCancelBtn').onclick = () => {
+                document.body.removeChild(overlay);
                 resolve(null);
+            };
+
+            overlay.querySelector('#loginSubmitBtn').onclick = async () => {
+                const username = overlay.querySelector('#loginUsername').value.trim();
+                const password = overlay.querySelector('#loginPassword').value;
+                const errorEl = overlay.querySelector('#loginError');
+
+                if (!username || !password) {
+                    errorEl.textContent = '请填写昵称和密码';
+                    errorEl.style.display = '';
+                    return;
+                }
+
+                const btn = overlay.querySelector('#loginSubmitBtn');
+                btn.disabled = true;
+                btn.textContent = '处理中...';
+
+                if (mode === 'register') {
+                    const password2 = overlay.querySelector('#loginPassword2').value;
+                    if (password.length < 4) {
+                        errorEl.textContent = '密码至少4位';
+                        errorEl.style.display = '';
+                        btn.disabled = false;
+                        btn.textContent = '注册';
+                        return;
+                    }
+                    if (password !== password2) {
+                        errorEl.textContent = '两次密码不一致';
+                        errorEl.style.display = '';
+                        btn.disabled = false;
+                        btn.textContent = '注册';
+                        return;
+                    }
+                    try {
+                        const resp = await fetch('/api/meal-user/register', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ username, password })
+                        });
+                        const data = await resp.json();
+                        if (data.success) {
+                            setMealUser(username);
+                            // 注册后不自动存密码到 localStorage（需手动登录一次）
+                            document.body.removeChild(overlay);
+                            resolve(username);
+                        } else {
+                            errorEl.textContent = data.message || '注册失败';
+                            errorEl.style.display = '';
+                            btn.disabled = false;
+                            btn.textContent = '注册';
+                        }
+                    } catch (e) {
+                        errorEl.textContent = '网络错误';
+                        errorEl.style.display = '';
+                        btn.disabled = false;
+                        btn.textContent = '注册';
+                    }
+                } else {
+                    // 登录
+                    try {
+                        const resp = await fetch('/api/meal-user/login', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ username, password })
+                        });
+                        const data = await resp.json();
+                        if (data.success) {
+                            setMealUser(username);
+                            const autoCheck = overlay.querySelector('#autoLoginCheck');
+                            if (autoCheck && autoCheck.checked) {
+                                localStorage.setItem('meal_pwd', password);
+                                localStorage.setItem('meal_auto_login', 'true');
+                            } else {
+                                localStorage.removeItem('meal_pwd');
+                                localStorage.removeItem('meal_auto_login');
+                            }
+                            document.body.removeChild(overlay);
+                            resolve(username);
+                        } else {
+                            errorEl.textContent = data.message || '登录失败';
+                            errorEl.style.display = '';
+                            btn.disabled = false;
+                            btn.textContent = '登录';
+                        }
+                    } catch (e) {
+                        errorEl.textContent = '网络错误';
+                        errorEl.style.display = '';
+                        btn.disabled = false;
+                        btn.textContent = '登录';
+                    }
+                }
+            };
+
+            // 密码框回车提交
+            const lastPwInput = overlay.querySelector('#loginPassword2') || overlay.querySelector('#loginPassword');
+            lastPwInput.onkeypress = (e) => {
+                if (e.key === 'Enter') overlay.querySelector('#loginSubmitBtn').click();
+            };
+
+            // 切换模式
+            const switchLink = overlay.querySelector(isLogin ? '#switchToRegister' : '#switchToLogin');
+            if (switchLink) {
+                switchLink.onclick = (e) => {
+                    e.preventDefault();
+                    mode = isLogin ? 'register' : 'login';
+                    renderDialog();
+                };
             }
-        };
-        input.onkeypress = (e) => {
-            if (e.key === 'Enter') overlay.querySelector('#mealUserConfirmBtn').click();
-        };
+
+            // 聚焦
+            const pwInput = overlay.querySelector('#loginPassword');
+            if (existingUser) pwInput.focus();
+            else overlay.querySelector('#loginUsername').focus();
+        }
+
+        document.body.appendChild(overlay);
+        renderDialog();
     });
+}
+
+async function tryAutoLogin() {
+    const user = getMealUser();
+    const pwd = localStorage.getItem('meal_pwd');
+    if (!user || !pwd) return null;
+
+    try {
+        const resp = await fetch('/api/meal-user/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: user, password: pwd })
+        });
+        const data = await resp.json();
+        if (data.success) return user;
+    } catch (e) {
+        console.error('自动登录失败:', e);
+    }
+    // 自动登录失败，清除凭据
+    localStorage.removeItem('meal_pwd');
+    localStorage.removeItem('meal_auto_login');
+    return null;
 }
 
 function updateMealUserDisplay() {
@@ -1287,10 +1435,11 @@ function updateMealUserDisplay() {
 }
 
 async function switchMealUser() {
-    const name = await promptMealUser();
+    clearMealAuth();
+    const name = await showMealLoginDialog();
     if (name) {
         updateMealUserDisplay();
-        showMealCheckin(); // 重新加载当前用户数据
+        showMealCheckin();
     }
 }
 
@@ -1300,10 +1449,20 @@ async function showMealCheckin() {
         return;
     }
 
-    // 确保有用户名
+    // 1. 尝试自动登录
     let user = getMealUser();
+    if (isAutoLogin() && user) {
+        const autoUser = await tryAutoLogin();
+        if (autoUser) {
+            user = autoUser;
+        } else {
+            user = ''; // 自动登录失败，需要重新登录
+        }
+    }
+
+    // 2. 如果没有用户，弹出登录/注册弹窗
     if (!user) {
-        user = await promptMealUser();
+        user = await showMealLoginDialog();
         if (!user) return; // 用户取消了
     }
 

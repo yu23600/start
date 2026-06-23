@@ -1,4 +1,4 @@
-# v9 - 打卡记录用户隔离
+# v10 - 打卡登录：昵称+密码+自动登录
 services:
   - type: web
     name: cafeteria-recommender

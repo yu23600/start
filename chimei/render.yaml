@@ -1,3 +1,4 @@
+# v2 - 重构云端同步，添加数据导出/导入
 services:
   - type: web
     name: cafeteria-recommender

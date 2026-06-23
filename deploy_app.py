@@ -294,7 +294,7 @@ def index():
 @app.route('/universities.json')
 def get_universities():
     """提供大学列表JSON文件"""
-    uni_file = os.path.join(BASE_DIR, 'universities.json')
+    uni_file = os.path.join(BASE_DIR, 'chimei', 'universities.json')
     if os.path.exists(uni_file):
         with open(uni_file, 'r', encoding='utf-8') as f:
             return jsonify(json.load(f))

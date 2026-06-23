@@ -730,7 +730,8 @@ function showChangeSchoolDialog() {
 }
 
 // ========== 云端同步功能 ==========
-const CLOUD_SERVER_URL = 'http://localhost:5000';
+// 使用相对路径，自动适配本地运行和云端部署
+const CLOUD_SERVER_URL = '';
 
 /**
  * 显示云端状态消息

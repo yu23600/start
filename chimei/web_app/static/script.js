@@ -1224,3 +1224,300 @@ async function finishTagging() {
     document.getElementById('fetcherFooter').style.display = '';
     closeDishFetcher();
 }
+
+// ========== 三餐打卡功能 ==========
+let currentMealTab = 'breakfast';
+let todayMeals = { breakfast: [], lunch: [], dinner: [] };
+let schoolMenuItems = [];
+
+async function showMealCheckin() {
+    if (!currentSchool) {
+        showNotification('请先选择一个学校！', 'warning');
+        return;
+    }
+
+    document.getElementById('mealCheckinModal').classList.add('show');
+
+    // 显示日期
+    const today = new Date();
+    const dateStr = today.toISOString().split('T')[0];
+    document.getElementById('checkinDate').textContent = `📅 ${dateStr}`;
+
+    // 加载今日打卡数据
+    try {
+        const resp = await fetch('/api/meal-log/today');
+        const data = await resp.json();
+        if (data.success) {
+            todayMeals = data.meals || { breakfast: [], lunch: [], dinner: [] };
+        }
+    } catch (e) {
+        console.error('加载打卡数据失败:', e);
+    }
+
+    // 加载学校菜单
+    try {
+        const resp = await fetch(`/api/menu/${encodeURIComponent(currentSchool)}`);
+        const data = await resp.json();
+        if (data.success) {
+            schoolMenuItems = data.items || [];
+        } else {
+            schoolMenuItems = [];
+        }
+    } catch (e) {
+        console.error('加载学校菜单失败:', e);
+        schoolMenuItems = [];
+    }
+
+    updateCheckinStatus();
+    switchMealTab('breakfast');
+}
+
+function closeMealCheckin() {
+    document.getElementById('mealCheckinModal').classList.remove('show');
+}
+
+function switchMealTab(meal) {
+    currentMealTab = meal;
+
+    // 更新标签页样式
+    document.querySelectorAll('.meal-tab').forEach(tab => tab.classList.remove('active'));
+    const tabId = { breakfast: 'tabBreakfast', lunch: 'tabLunch', dinner: 'tabDinner' }[meal];
+    document.getElementById(tabId).classList.add('active');
+
+    renderMealMenu(meal);
+}
+
+function renderMealMenu(meal) {
+    const container = document.getElementById('mealMenuList');
+    const selected = todayMeals[meal] || [];
+
+    if (schoolMenuItems.length === 0) {
+        container.innerHTML = '<p style="color:#999;text-align:center;padding:20px;">当前学校暂无菜单数据，请手动输入菜品</p>';
+    } else {
+        let html = '';
+        for (const dish of schoolMenuItems) {
+            const checked = selected.includes(dish) ? 'checked' : '';
+            html += `<label class="meal-menu-item">
+                <input type="checkbox" ${checked} onchange="toggleMealDish('${meal}', '${dish.replace(/'/g, "\\'")}', this.checked)">
+                <span>${dish}</span>
+            </label>`;
+        }
+        container.innerHTML = html;
+    }
+
+    // 显示已选菜品
+    updateSelectedDisplay(meal);
+}
+
+function toggleMealDish(meal, dish, checked) {
+    if (!todayMeals[meal]) todayMeals[meal] = [];
+
+    if (checked) {
+        if (!todayMeals[meal].includes(dish)) {
+            todayMeals[meal].push(dish);
+        }
+    } else {
+        todayMeals[meal] = todayMeals[meal].filter(d => d !== dish);
+    }
+
+    updateSelectedDisplay(meal);
+    updateCheckinStatus();
+}
+
+function addCustomDish() {
+    const input = document.getElementById('customDishInput');
+    const dish = input.value.trim();
+    if (!dish) return;
+
+    const meal = currentMealTab;
+    if (!todayMeals[meal]) todayMeals[meal] = [];
+
+    if (todayMeals[meal].includes(dish)) {
+        showNotification('该菜品已添加', 'warning');
+        return;
+    }
+
+    todayMeals[meal].push(dish);
+    input.value = '';
+    renderMealMenu(meal);
+    updateCheckinStatus();
+}
+
+function updateSelectedDisplay(meal) {
+    const selected = todayMeals[meal] || [];
+    const display = document.getElementById('selectedDishesDisplay');
+    if (selected.length === 0) {
+        display.innerHTML = '<span style="color:#999;">尚未选择任何菜品</span>';
+    } else {
+        display.innerHTML = `<strong>已选 ${selected.length} 道:</strong> ${selected.join('、')}`;
+    }
+}
+
+function updateCheckinStatus() {
+    const bar = document.getElementById('checkinStatusBar');
+    const mealNames = { breakfast: '早餐', lunch: '午餐', dinner: '晚餐' };
+    let html = '';
+    for (const [meal, name] of Object.entries(mealNames)) {
+        const done = (todayMeals[meal] && todayMeals[meal].length > 0);
+        html += `<span class="meal-status-item${done ? ' done' : ''}">${done ? '✅' : '⬜'} ${name}</span>`;
+    }
+    bar.innerHTML = html;
+}
+
+async function saveCurrentMeal() {
+    const meal = currentMealTab;
+    const dishes = todayMeals[meal] || [];
+    const today = new Date().toISOString().split('T')[0];
+    const mealNames = { breakfast: '早餐', lunch: '午餐', dinner: '晚餐' };
+
+    try {
+        const resp = await fetch('/api/meal-log/save', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ date: today, meal: meal, dishes: dishes })
+        });
+        const data = await resp.json();
+        if (data.success) {
+            showNotification(`${mealNames[meal]}已保存 ${dishes.length} 道菜品`, 'success');
+        } else {
+            showNotification(data.message || '保存失败', 'error');
+        }
+    } catch (e) {
+        console.error('保存打卡失败:', e);
+        showNotification('保存失败', 'error');
+    }
+}
+
+// ========== 周饮食报告 ==========
+async function showWeeklyReport() {
+    // 确保报告弹窗可见
+    document.getElementById('weeklyReportModal').classList.add('show');
+    const content = document.getElementById('reportContent');
+    content.innerHTML = '<p style="text-align:center;color:#999;padding:30px;">加载中...</p>';
+
+    try {
+        const resp = await fetch('/api/meal-log/weekly-report');
+        const data = await resp.json();
+        if (data.success) {
+            renderReport(data);
+        } else {
+            content.innerHTML = '<p style="color:#e74c3c;text-align:center;">加载报告失败</p>';
+        }
+    } catch (e) {
+        console.error('加载报告失败:', e);
+        content.innerHTML = '<p style="color:#e74c3c;text-align:center;">加载报告失败</p>';
+    }
+}
+
+function closeWeeklyReport() {
+    document.getElementById('weeklyReportModal').classList.remove('show');
+}
+
+function renderReport(data) {
+    const content = document.getElementById('reportContent');
+
+    // 如果没有数据
+    if (data.days_checked_in === 0) {
+        content.innerHTML = `
+            <div class="report-empty">
+                <span class="empty-icon">📭</span>
+                <p>过去 7 天还没有打卡记录</p>
+                <p style="font-size:0.9em;margin-top:8px;">点击"今日打卡"开始记录你的饮食吧！</p>
+            </div>`;
+        return;
+    }
+
+    let html = '';
+
+    // 概览卡片
+    const cardColors = [
+        'linear-gradient(135deg, #667eea, #764ba2)',
+        'linear-gradient(135deg, #11998e, #38ef7d)',
+        'linear-gradient(135deg, #ee9ca7, #ffdde1)'
+    ];
+    html += '<div class="report-stat-cards">';
+    html += `<div class="report-stat-card" style="background:${cardColors[0]}">
+        <span class="stat-number">${data.days_checked_in}</span>
+        <span class="stat-label">打卡天数 / 7天</span>
+    </div>`;
+    html += `<div class="report-stat-card" style="background:${cardColors[1]}">
+        <span class="stat-number">${data.total_meals}</span>
+        <span class="stat-label">总餐数</span>
+    </div>`;
+    html += `<div class="report-stat-card" style="background:${cardColors[2]}">
+        <span class="stat-number">${data.total_dishes}</span>
+        <span class="stat-label">总菜品</span>
+    </div>`;
+    html += '</div>';
+
+    // 打卡日历
+    html += '<div class="report-section-title">📅 打卡日历</div>';
+    html += '<div class="report-calendar">';
+    for (const day of data.daily_summary) {
+        const hasData = day.meals > 0;
+        const shortDate = day.date.slice(5); // MM-DD
+        html += `<div class="report-day${hasData ? ' has-data' : ''}">
+            <span class="day-label">周${day.weekday}</span>
+            <span class="day-date">${shortDate}</span>
+            <div class="day-dots">
+                <span class="day-dot${day.meals >= 1 ? ' filled' : ''}" title="早餐"></span>
+                <span class="day-dot${day.meals >= 2 ? ' filled' : ''}" title="午餐"></span>
+                <span class="day-dot${day.meals >= 3 ? ' filled' : ''}" title="晚餐"></span>
+            </div>
+        </div>`;
+    }
+    html += '</div>';
+
+    // 最常吃菜品
+    if (data.top_dishes.length > 0) {
+        html += '<div class="report-section-title">🍽️ 最常吃的菜</div>';
+        html += '<div class="report-bar-chart">';
+        const maxCount = data.top_dishes[0].count;
+        for (const dish of data.top_dishes) {
+            const pct = (dish.count / maxCount * 100).toFixed(0);
+            html += `<div class="report-bar-row">
+                <span class="report-bar-label" title="${dish.name}">${dish.name}</span>
+                <div class="report-bar-track">
+                    <div class="report-bar-fill" style="width:${pct}%"></div>
+                </div>
+                <span class="report-bar-count">${dish.count}次</span>
+            </div>`;
+        }
+        html += '</div>';
+    }
+
+    // 营养分类分布
+    const catEntries = Object.entries(data.category_distribution);
+    if (catEntries.length > 0) {
+        html += '<div class="report-section-title">🥗 营养分类分布</div>';
+        html += '<div class="report-bar-chart">';
+        const maxCat = catEntries[0][1];
+        for (const [cat, count] of catEntries) {
+            const pct = (count / maxCat * 100).toFixed(0);
+            html += `<div class="report-bar-row">
+                <span class="report-bar-label">${cat}</span>
+                <div class="report-bar-track">
+                    <div class="report-bar-fill" style="width:${pct}%;background:linear-gradient(90deg,#11998e,#38ef7d)"></div>
+                </div>
+                <span class="report-bar-count">${count}次</span>
+            </div>`;
+        }
+        html += '</div>';
+    }
+
+    // 各餐完成率
+    html += '<div class="report-section-title">📊 各餐打卡情况</div>';
+    const mealLabels = { breakfast: '🌅 早餐', lunch: '☀️ 午餐', dinner: '🌙 晚餐' };
+    html += '<div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">';
+    for (const [meal, count] of Object.entries(data.meal_completion)) {
+        const pct = Math.round(count / 7 * 100);
+        html += `<div style="text-align:center;padding:10px 15px;background:#f8f9fa;border-radius:8px;min-width:80px;">
+            <div style="font-size:0.85em;color:#666;">${mealLabels[meal]}</div>
+            <div style="font-size:1.5em;font-weight:bold;color:#667eea;">${pct}%</div>
+            <div style="font-size:0.75em;color:#999;">${count}/7天</div>
+        </div>`;
+    }
+    html += '</div>';
+
+    content.innerHTML = html;
+}

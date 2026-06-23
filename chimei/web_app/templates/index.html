@@ -54,10 +54,12 @@
                     <button onclick="saveMenu()" class="btn btn-primary">保存当前菜单</button>
                     <button onclick="randomRecommend()" class="btn btn-success">随机推荐一个菜品</button>
                     <button onclick="showDishFetcher()" class="btn btn-info">🔍 自动获取菜品</button>
+                    <button onclick="showMealCheckin()" class="btn btn-warning">📝 今日打卡</button>
                 </div>
                 <div class="action-buttons" style="margin-top: 8px;">
                     <button onclick="exportData()" class="btn btn-secondary">📤 导出数据</button>
                     <button onclick="document.getElementById('importFileInput').click()" class="btn btn-secondary">📥 导入数据</button>
+                    <button onclick="showWeeklyReport()" class="btn btn-info">📊 饮食报告</button>
                     <input type="file" id="importFileInput" accept=".json" style="display:none;" onchange="importData(event)">
                 </div>
             </div>
@@ -292,6 +294,50 @@
                     <button onclick="closeDishFetcher()" class="btn btn-secondary btn-large">
                         取消
                     </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 三餐打卡弹窗 -->
+        <div id="mealCheckinModal" class="modal">
+            <div class="modal-content wizard-modal">
+                <span class="close-btn" onclick="closeMealCheckin()">&times;</span>
+                <div class="wizard-header">
+                    <h2>📝 今日三餐打卡</h2>
+                    <p id="checkinDate" style="color:#666;margin-top:5px;"></p>
+                </div>
+                <div id="checkinStatusBar" class="meal-status-bar"></div>
+                <div class="meal-tabs" id="mealTabs">
+                    <button class="meal-tab active" onclick="switchMealTab('breakfast')" id="tabBreakfast">🌅 早餐</button>
+                    <button class="meal-tab" onclick="switchMealTab('lunch')" id="tabLunch">☀️ 午餐</button>
+                    <button class="meal-tab" onclick="switchMealTab('dinner')" id="tabDinner">🌙 晚餐</button>
+                </div>
+                <div id="mealContent" style="padding: 15px 0;">
+                    <div id="mealMenuList" class="meal-menu-list" style="max-height: 250px; overflow-y: auto; border: 1px solid #e0e0e0; border-radius: 8px; padding: 10px;"></div>
+                    <div style="margin-top: 12px; display: flex; gap: 8px;">
+                        <input type="text" id="customDishInput" class="form-control" placeholder="手动添加菜品..." style="flex: 1;" onkeypress="if(event.key==='Enter')addCustomDish()">
+                        <button onclick="addCustomDish()" class="btn btn-primary" style="white-space: nowrap;">添加</button>
+                    </div>
+                    <div id="selectedDishesDisplay" style="margin-top: 10px; font-size: 0.9em; color: #666;"></div>
+                    <div style="text-align: center; margin-top: 15px;">
+                        <button onclick="saveCurrentMeal()" class="btn btn-success btn-large">💾 保存本餐</button>
+                    </div>
+                </div>
+                <div class="wizard-footer">
+                    <button onclick="showWeeklyReport()" class="btn btn-info">📊 查看本周报告</button>
+                    <button onclick="closeMealCheckin()" class="btn btn-secondary">关闭</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 周报告弹窗 -->
+        <div id="weeklyReportModal" class="modal">
+            <div class="modal-content" style="max-width: 600px; max-height: 85vh; overflow-y: auto;">
+                <span class="close-btn" onclick="closeWeeklyReport()">&times;</span>
+                <h2 style="color: #667eea; margin-bottom: 20px; text-align: center;">📊 本周饮食报告</h2>
+                <div id="reportContent" style="padding: 10px 0;"></div>
+                <div style="text-align: center; margin-top: 20px;">
+                    <button onclick="closeWeeklyReport()" class="btn btn-secondary btn-large">关闭</button>
                 </div>
             </div>
         </div>

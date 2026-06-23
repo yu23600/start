@@ -1,4 +1,4 @@
-# v7 - 置信度警告横幅
+# v8 - 三餐打卡 + 周饮食报告
 services:
   - type: web
     name: cafeteria-recommender

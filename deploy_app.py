@@ -19,6 +19,7 @@ import os
 import random
 import re
 import time
+import datetime
 
 # ========== 基础路径配置 ==========
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -31,6 +32,7 @@ CORS(app)
 # ========== 配置 ==========
 DATA_FILE = os.path.join(BASE_DIR, 'chimei', 'cafeteria_data.json')
 USER_TAGS_FILE = os.path.join(BASE_DIR, 'chimei', 'user_dish_tags.json')
+MEAL_LOGS_FILE = os.path.join(BASE_DIR, 'chimei', 'meal_logs.json')
 
 # ========== 主食/通用词汇过滤 ==========
 STAPLE_FOODS = {"米饭", "面条"}
@@ -279,6 +281,30 @@ def save_user_dish_tags(tags):
         return True
     except Exception as e:
         print(f"保存用户标签出错: {e}")
+        return False
+
+
+def load_meal_logs():
+    """加载三餐打卡记录"""
+    if not os.path.exists(MEAL_LOGS_FILE):
+        return {}
+    try:
+        with open(MEAL_LOGS_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return data if isinstance(data, dict) else {}
+    except Exception as e:
+        print(f"加载打卡记录出错: {e}")
+        return {}
+
+
+def save_meal_logs(logs):
+    """保存三餐打卡记录"""
+    try:
+        with open(MEAL_LOGS_FILE, "w", encoding="utf-8") as f:
+            json.dump(logs, f, ensure_ascii=False, indent=2)
+        return True
+    except Exception as e:
+        print(f"保存打卡记录出错: {e}")
         return False
 
 
@@ -1048,6 +1074,118 @@ def get_all_dish_tags():
         "success": True,
         "tags": user_tags,
         "count": len(user_tags)
+    })
+
+
+# ========== 三餐打卡 API ==========
+@app.route('/api/meal-log/save', methods=['POST'])
+def save_meal_log():
+    """保存某天的某一餐记录（合并模式：覆盖该餐）"""
+    data = request.json or {}
+    date_str = data.get('date', '').strip()
+    meal = data.get('meal', '').strip()
+    dishes = data.get('dishes', [])
+
+    if not date_str or meal not in ('breakfast', 'lunch', 'dinner'):
+        return jsonify({"success": False, "message": "参数无效"}), 400
+    if not isinstance(dishes, list):
+        return jsonify({"success": False, "message": "菜品格式无效"}), 400
+
+    cleaned = list(dict.fromkeys(d.strip() for d in dishes if d.strip()))
+
+    logs = load_meal_logs()
+    if date_str not in logs:
+        logs[date_str] = {"breakfast": [], "lunch": [], "dinner": []}
+    logs[date_str][meal] = cleaned
+
+    if save_meal_logs(logs):
+        return jsonify({
+            "success": True,
+            "message": f"已保存{meal}记录",
+            "date": date_str,
+            "meal": meal,
+            "count": len(cleaned)
+        })
+    else:
+        return jsonify({"success": False, "message": "保存失败"}), 500
+
+
+@app.route('/api/meal-log/today', methods=['GET'])
+def get_today_meal_log():
+    """获取今天的打卡状态"""
+    today = time.strftime("%Y-%m-%d")
+    logs = load_meal_logs()
+    today_data = logs.get(today, {"breakfast": [], "lunch": [], "dinner": []})
+    return jsonify({
+        "success": True,
+        "date": today,
+        "meals": today_data
+    })
+
+
+@app.route('/api/meal-log/weekly-report', methods=['GET'])
+def get_weekly_report():
+    """生成过去7天的饮食报告"""
+    logs = load_meal_logs()
+    today = datetime.date.today()
+
+    user_tags = load_user_dish_tags()
+    merged_tags = {**user_tags, **FOOD_TAGS}
+
+    days_checked_in = 0
+    total_meals = 0
+    total_dishes = 0
+    dish_counter = {}
+    category_counter = {}
+    daily_summary = []
+    meal_completion = {"breakfast": 0, "lunch": 0, "dinner": 0}
+
+    for i in range(6, -1, -1):
+        day = today - datetime.timedelta(days=i)
+        day_str = day.strftime("%Y-%m-%d")
+        day_data = logs.get(day_str, {"breakfast": [], "lunch": [], "dinner": []})
+
+        day_meals = 0
+        day_dish_count = 0
+        for meal_type in ("breakfast", "lunch", "dinner"):
+            dishes = day_data.get(meal_type, [])
+            if dishes:
+                day_meals += 1
+                meal_completion[meal_type] += 1
+                for dish in dishes:
+                    day_dish_count += 1
+                    total_dishes += 1
+                    dish_counter[dish] = dish_counter.get(dish, 0) + 1
+                    if dish in merged_tags:
+                        for tag in merged_tags[dish]:
+                            category_counter[tag] = category_counter.get(tag, 0) + 1
+
+        if day_meals > 0:
+            days_checked_in += 1
+        total_meals += day_meals
+
+        daily_summary.append({
+            "date": day_str,
+            "weekday": ["一", "二", "三", "四", "五", "六", "日"][day.weekday()],
+            "meals": day_meals,
+            "dish_count": day_dish_count
+        })
+
+    sorted_dishes = sorted(dish_counter.items(), key=lambda x: x[1], reverse=True)[:5]
+    top_dishes = [{"name": name, "count": count} for name, count in sorted_dishes]
+
+    sorted_cats = sorted(category_counter.items(), key=lambda x: x[1], reverse=True)[:8]
+    category_distribution = {cat: count for cat, count in sorted_cats}
+
+    return jsonify({
+        "success": True,
+        "days_checked_in": days_checked_in,
+        "total_meals": total_meals,
+        "total_dishes": total_dishes,
+        "top_dishes": top_dishes,
+        "category_distribution": category_distribution,
+        "daily_summary": daily_summary,
+        "meal_completion": meal_completion
     })
 
 

@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>吃了么 - 智能食堂菜品推荐</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <!-- 头部 -->
+        <header class="header">
+            <h1>🍽️ 吃了么</h1>
+            <p class="subtitle">智能食堂菜品推荐系统</p>
+        </header>
+
+        <!-- 学校显示区域 -->
+        <div class="school-selector">
+            <div class="school-display">
+                <div class="school-info">
+                    <span class="school-label">🏫 当前学校:</span>
+                    <span id="currentSchoolName" class="school-name">加载中...</span>
+                </div>
+                <button onclick="showChangeSchoolDialog()" class="btn btn-secondary">
+                    ✏️ 修改学校
+                </button>
+            </div>
+        </div>
+
+        <!-- 模式切换 -->
+        <div class="mode-toggle">
+            <button id="modeToggleBtn" onclick="toggleMode()" class="btn btn-toggle">
+                切换到专业版模式
+            </button>
+        </div>
+
+        <!-- 简洁模式 -->
+        <div id="simpleMode" class="mode-content active">
+            <div class="menu-section">
+                <div class="section-header">
+                    <h2>菜品列表</h2>
+                    <span id="itemCount" class="item-count">(0 项)</span>
+                </div>
+                
+                <textarea 
+                    id="menuText" 
+                    class="menu-textarea" 
+                    placeholder="请输入菜品，每行一个菜品，或用逗号分隔多个菜品"
+                ></textarea>
+                
+                <p class="hint">提示：每行输入一个菜品，或用逗号/空格分隔多个菜品</p>
+                
+                <div class="action-buttons">
+                    <button onclick="saveMenu()" class="btn btn-primary">保存当前菜单</button>
+                    <button onclick="randomRecommend()" class="btn btn-success">随机推荐一个菜品</button>
+                    <button onclick="showDishFetcher()" class="btn btn-info">🔍 自动获取菜品</button>
+                </div>
+                
+                <!-- 云端同步区域 -->
+                <div class="cloud-sync-section">
+                    <h3 class="section-title">☁️ 云端数据同步</h3>
+                    <p class="hint">将本地数据上传到云端服务器，或从云端下载最新数据</p>
+                    <div class="action-buttons">
+                        <button onclick="uploadToCloud()" class="btn btn-info">⬆️ 上传到云端</button>
+                        <button onclick="downloadFromCloud()" class="btn btn-warning">⬇️ 从云端下载</button>
+                        <button onclick="showCloudStats()" class="btn btn-secondary">📊 查看云端统计</button>
+                    </div>
+                    <div id="cloudStatus" class="cloud-status"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 专业模式 -->
+        <div id="advancedMode" class="mode-content">
+            <!-- 身体数据 -->
+            <div class="section-card">
+                <h3 class="section-title">身体数据</h3>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="ageInput">年龄:</label>
+                        <input type="number" id="ageInput" class="form-control" value="18" min="0" max="100">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>性别:</label>
+                        <div class="radio-group">
+                            <label class="radio-label">
+                                <input type="radio" name="gender" value="男"> 男
+                            </label>
+                            <label class="radio-label">
+                                <input type="radio" name="gender" value="女" checked> 女
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="heightInput">身高(cm):</label>
+                        <input type="number" id="heightInput" class="form-control" placeholder="例如: 170" step="0.1">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="weightInput">体重(kg):</label>
+                        <input type="number" id="weightInput" class="form-control" placeholder="例如: 60" step="0.1">
+                    </div>
+                    
+                    <button onclick="calculateBMI()" class="btn btn-small">计算BMI值</button>
+                </div>
+                
+                <div id="bmiResult" class="bmi-result">
+                    BMI: 未计算
+                </div>
+                
+                <p class="hint">标准: 18.5-24正常, &lt;18.5偏瘦, ≥24偏胖</p>
+            </div>
+
+            <!-- 特殊状态 -->
+            <div class="section-card">
+                <h3 class="section-title">特殊身体状态（可多选）</h3>
+                
+                <div class="checkbox-grid">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="cond_child" value="儿童"> 儿童
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="cond_period" value="经期"> 经期
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="cond_cold" value="感冒"> 感冒
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="cond_stomach" value="肠胃不适"> 肠胃不适
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="cond_exercise" value="运动后"> 运动后
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="cond_underweight" value="低体重"> 低体重
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="cond_overweight" value="超重"> 超重
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="cond_vegetarian" value="素食"> 素食
+                    </label>
+                </div>
+            </div>
+
+            <!-- 智能推荐按钮 -->
+            <div class="action-section">
+                <button onclick="smartRecommend()" class="btn btn-success btn-large">
+                    帮我决定今天吃什么 👉
+                </button>
+            </div>
+
+            <!-- 营养提示 -->
+            <div class="section-card tip-card">
+                <h3 class="section-title">智能饮食小贴士</h3>
+                <p id="nutritionTip" class="tip-text">
+                    输入身高体重，系统自动计算BMI，点击"帮我决定今天吃什么"获得个性化推荐
+                </p>
+            </div>
+        </div>
+
+        <!-- 结果弹窗 -->
+        <div id="resultModal" class="modal">
+            <div class="modal-content">
+                <span class="close-btn" onclick="closeModal()">&times;</span>
+                <div id="modalBody"></div>
+            </div>
+        </div>
+
+        <!-- 输入对话框 -->
+        <div id="inputModal" class="modal">
+            <div class="modal-content modal-small">
+                <h3 id="inputModalTitle">标题</h3>
+                <p id="inputModalPrompt">提示</p>
+                <input type="text" id="inputModalField" class="form-control">
+                <div class="modal-buttons">
+                    <button onclick="confirmInputModal()" class="btn btn-primary">确认</button>
+                    <button onclick="closeInputModal()" class="btn btn-secondary">取消</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 首次使用学校选择向导 -->
+        <div id="schoolWizardModal" class="modal">
+            <div class="modal-content wizard-modal">
+                <div class="wizard-header">
+                    <h2>🎉 欢迎使用“吃了么”</h2>
+                    <p class="wizard-subtitle">首次使用，请选择您的学校</p>
+                </div>
+                
+                <div class="wizard-body">
+                    <div class="search-box">
+                        <input type="text" id="schoolSearchInput" class="form-control" placeholder="搜索学校名称..." oninput="filterSchools()">
+                    </div>
+                    
+                    <div class="school-list-container">
+                        <div id="schoolList" class="school-list">
+                            <p class="loading-text">加载中...</p>
+                        </div>
+                    </div>
+                    
+                    <div class="custom-school-option">
+                        <p>或者手动输入：</p>
+                        <input type="text" id="customSchoolInput" class="form-control" placeholder="输入您的学校名称">
+                    </div>
+                </div>
+                
+                <div class="wizard-footer">
+                    <button onclick="confirmSchoolSelection()" class="btn btn-primary btn-large">
+                        确认选择
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 菜品自动获取与审核弹窗 -->
+        <div id="dishFetcherModal" class="modal">
+            <div class="modal-content wizard-modal">
+                <div class="wizard-header">
+                    <h2>🔍 自动获取菜品</h2>
+                    <p class="wizard-subtitle" id="fetcherSubtitle">为当前学校自动获取菜品数据</p>
+                </div>
+                
+                <div class="wizard-body" id="fetcherBody">
+                    <!-- 步骤1: 选择数据源 -->
+                    <div id="fetcherStep1">
+                        <div id="fetcherSourceInfo" style="margin-bottom: 15px;"></div>
+                        <div id="fetcherLoading" style="display: none; text-align: center; padding: 20px;">
+                            <p>正在获取菜品数据...</p>
+                        </div>
+                        <div id="fetcherError" style="display: none; color: #e74c3c; padding: 10px;"></div>
+                    </div>
+                    
+                    <!-- 步骤2: 审核菜品 -->
+                    <div id="fetcherStep2" style="display: none;">
+                        <div id="fetcherResultInfo" style="margin-bottom: 10px; padding: 10px; background: #f0f7ff; border-radius: 8px; font-size: 0.9em;"></div>
+                        
+                        <div style="margin-bottom: 10px;">
+                            <label style="font-weight: bold;">菜品列表（点击取消勾选可移除）:</label>
+                            <div style="margin-top: 5px;">
+                                <button onclick="toggleAllDishes(true)" class="btn btn-small" style="margin-right: 5px;">全选</button>
+                                <button onclick="toggleAllDishes(false)" class="btn btn-small">全不选</button>
+                                <span id="selectedCount" style="margin-left: 10px; color: #666;"></span>
+                            </div>
+                        </div>
+                        
+                        <div id="dishChecklist" class="dish-checklist" style="max-height: 300px; overflow-y: auto; border: 1px solid #ddd; border-radius: 8px; padding: 10px;">
+                        </div>
+                        
+                        <div style="margin-top: 15px;">
+                            <label style="font-weight: bold;">补充菜品（可选）:</label>
+                            <textarea id="extraDishes" class="form-control" rows="2" placeholder="输入额外的菜品，每行一个" style="margin-top: 5px;"></textarea>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="wizard-footer" id="fetcherFooter">
+                    <button id="fetcherActionBtn" onclick="startFetchDishes()" class="btn btn-primary btn-large">
+                        开始获取
+                    </button>
+                    <button onclick="closeDishFetcher()" class="btn btn-secondary btn-large">
+                        取消
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 页脚 -->
+        <footer class="footer">
+            <p>&copy; 2026 吃了么 | 让每一餐都更健康</p>
+        </footer>
+    </div>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>

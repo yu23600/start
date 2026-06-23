@@ -1,4 +1,4 @@
-# v3 - smart recommend: 12 conditions, FOOD_TAGS dual scoring, tag_matches
+# v4 - update 宁德师范学院 & 福建医科大学 dish data (2025 verified)
 services:
   - type: web
     name: cafeteria-recommender

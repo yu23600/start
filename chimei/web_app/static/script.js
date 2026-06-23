@@ -1276,9 +1276,9 @@ function showMealLoginDialog() {
                     <h3 style="margin:0 0 6px;color:#667eea;text-align:center;">${isLogin ? '🔑 登录' : '📝 注册'}</h3>
                     <p style="margin:0 0 18px;color:#999;text-align:center;font-size:0.85em;">${isLogin ? '输入昵称和密码登录' : '创建新的打卡账号'}</p>
                     <div id="loginError" style="display:none;color:#e74c3c;text-align:center;font-size:0.85em;margin-bottom:10px;"></div>
-                    <input type="text" id="loginUsername" class="form-control" placeholder="昵称（最多12字）" value="${existingUser}" style="margin-bottom:10px;" maxlength="12">
-                    <input type="password" id="loginPassword" class="form-control" placeholder="密码${isLogin ? '' : '（至少4位）'}" style="margin-bottom:${isLogin ? '10px' : '10px'};">
-                    ${isLogin ? '' : '<input type="password" id="loginPassword2" class="form-control" placeholder="确认密码" style="margin-bottom:10px;">'}
+                    <input type="text" id="loginUsername" class="form-control" placeholder="昵称（最多12字）" value="${existingUser}" style="width:100%;margin-bottom:10px;" maxlength="12">
+                    <input type="password" id="loginPassword" class="form-control" placeholder="密码${isLogin ? '' : '（至少4位）'}" style="width:100%;margin-bottom:10px;">
+                    ${isLogin ? '' : '<input type="password" id="loginPassword2" class="form-control" placeholder="确认密码" style="width:100%;margin-bottom:10px;">'}
                     ${isLogin ? `<label style="display:flex;align-items:center;gap:6px;font-size:0.85em;color:#666;margin-bottom:12px;cursor:pointer;">
                         <input type="checkbox" id="autoLoginCheck" ${localStorage.getItem('meal_auto_login') === 'true' ? 'checked' : ''}> 自动登录（下次自动进入）
                     </label>` : ''}

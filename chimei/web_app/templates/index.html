@@ -304,6 +304,10 @@
                 <span class="close-btn" onclick="closeMealCheckin()">&times;</span>
                 <div class="wizard-header">
                     <h2>📝 今日三餐打卡</h2>
+                    <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-top:8px;">
+                        <span style="color:#667eea;font-weight:bold;">👤 <span id="mealUserDisplay">未设置</span></span>
+                        <button onclick="switchMealUser()" class="btn btn-small" style="font-size:0.75em;padding:3px 10px;">切换</button>
+                    </div>
                     <p id="checkinDate" style="color:#666;margin-top:5px;"></p>
                 </div>
                 <div id="checkinStatusBar" class="meal-status-bar"></div>

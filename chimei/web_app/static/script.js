@@ -1230,22 +1230,94 @@ let currentMealTab = 'breakfast';
 let todayMeals = { breakfast: [], lunch: [], dinner: [] };
 let schoolMenuItems = [];
 
+// --- 用户身份管理 ---
+function getMealUser() {
+    return localStorage.getItem('meal_user') || '';
+}
+
+function setMealUser(name) {
+    localStorage.setItem('meal_user', name.trim());
+}
+
+function promptMealUser() {
+    return new Promise((resolve) => {
+        const existing = getMealUser();
+        const overlay = document.createElement('div');
+        overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:10000;display:flex;align-items:center;justify-content:center;';
+        overlay.innerHTML = `
+            <div style="background:#fff;border-radius:16px;padding:30px;max-width:360px;width:90%;box-shadow:0 10px 40px rgba(0,0,0,0.2);">
+                <h3 style="margin:0 0 8px;color:#667eea;text-align:center;">👤 设置昵称</h3>
+                <p style="margin:0 0 16px;color:#999;text-align:center;font-size:0.9em;">输入你的昵称，打卡记录将与你绑定</p>
+                <input type="text" id="mealUserInput" class="form-control" placeholder="请输入昵称..." value="${existing}" style="margin-bottom:16px;">
+                <div style="display:flex;gap:10px;">
+                    <button id="mealUserCancelBtn" class="btn btn-secondary" style="flex:1;">取消</button>
+                    <button id="mealUserConfirmBtn" class="btn btn-primary" style="flex:1;">确认</button>
+                </div>
+            </div>`;
+        document.body.appendChild(overlay);
+
+        const input = overlay.querySelector('#mealUserInput');
+        input.focus();
+        input.select();
+
+        overlay.querySelector('#mealUserCancelBtn').onclick = () => {
+            document.body.removeChild(overlay);
+            resolve(null);
+        };
+        overlay.querySelector('#mealUserConfirmBtn').onclick = () => {
+            const val = input.value.trim();
+            document.body.removeChild(overlay);
+            if (val) {
+                setMealUser(val);
+                resolve(val);
+            } else {
+                resolve(null);
+            }
+        };
+        input.onkeypress = (e) => {
+            if (e.key === 'Enter') overlay.querySelector('#mealUserConfirmBtn').click();
+        };
+    });
+}
+
+function updateMealUserDisplay() {
+    const user = getMealUser();
+    const el = document.getElementById('mealUserDisplay');
+    if (el) el.textContent = user || '未设置';
+}
+
+async function switchMealUser() {
+    const name = await promptMealUser();
+    if (name) {
+        updateMealUserDisplay();
+        showMealCheckin(); // 重新加载当前用户数据
+    }
+}
+
 async function showMealCheckin() {
     if (!currentSchool) {
         showNotification('请先选择一个学校！', 'warning');
         return;
     }
 
+    // 确保有用户名
+    let user = getMealUser();
+    if (!user) {
+        user = await promptMealUser();
+        if (!user) return; // 用户取消了
+    }
+
     document.getElementById('mealCheckinModal').classList.add('show');
+    updateMealUserDisplay();
 
     // 显示日期
     const today = new Date();
     const dateStr = today.toISOString().split('T')[0];
     document.getElementById('checkinDate').textContent = `📅 ${dateStr}`;
 
-    // 加载今日打卡数据
+    // 加载今日打卡数据（携带用户名）
     try {
-        const resp = await fetch('/api/meal-log/today');
+        const resp = await fetch(`/api/meal-log/today?username=${encodeURIComponent(user)}`);
         const data = await resp.json();
         if (data.success) {
             todayMeals = data.meals || { breakfast: [], lunch: [], dinner: [] };
@@ -1369,12 +1441,18 @@ async function saveCurrentMeal() {
     const dishes = todayMeals[meal] || [];
     const today = new Date().toISOString().split('T')[0];
     const mealNames = { breakfast: '早餐', lunch: '午餐', dinner: '晚餐' };
+    const user = getMealUser();
+
+    if (!user) {
+        showNotification('请先设置昵称', 'warning');
+        return;
+    }
 
     try {
         const resp = await fetch('/api/meal-log/save', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ date: today, meal: meal, dishes: dishes })
+            body: JSON.stringify({ username: user, date: today, meal: meal, dishes: dishes })
         });
         const data = await resp.json();
         if (data.success) {
@@ -1395,8 +1473,14 @@ async function showWeeklyReport() {
     const content = document.getElementById('reportContent');
     content.innerHTML = '<p style="text-align:center;color:#999;padding:30px;">加载中...</p>';
 
+    const user = getMealUser();
+    if (!user) {
+        content.innerHTML = '<p style="color:#e74c3c;text-align:center;">请先设置昵称</p>';
+        return;
+    }
+
     try {
-        const resp = await fetch('/api/meal-log/weekly-report');
+        const resp = await fetch(`/api/meal-log/weekly-report?username=${encodeURIComponent(user)}`);
         const data = await resp.json();
         if (data.success) {
             renderReport(data);

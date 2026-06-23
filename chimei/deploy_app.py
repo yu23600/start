@@ -279,13 +279,20 @@ def save_user_dish_tags(tags):
 
 
 def load_meal_logs():
-    """加载三餐打卡记录"""
+    """加载三餐打卡记录（支持旧格式自动迁移）"""
     if not os.path.exists(MEAL_LOGS_FILE):
         return {}
     try:
         with open(MEAL_LOGS_FILE, "r", encoding="utf-8") as f:
             data = json.load(f)
-        return data if isinstance(data, dict) else {}
+        if not isinstance(data, dict):
+            return {}
+        # 检测旧格式：顶层key是日期格式 → 迁移到"默认用户"下
+        if data and all(isinstance(k, str) and len(k) == 10 and k[4] == '-' for k in list(data.keys())[:3]):
+            migrated = {"默认用户": data}
+            save_meal_logs(migrated)
+            return migrated
+        return data
     except Exception as e:
         print(f"加载打卡记录出错: {e}")
         return {}
@@ -1044,24 +1051,28 @@ def get_all_dish_tags():
 # ========== 三餐打卡 API ==========
 @app.route('/api/meal-log/save', methods=['POST'])
 def save_meal_log():
-    """保存某天的某一餐记录（合并模式：覆盖该餐）"""
+    """保存某用户的某天某一餐记录"""
     data = request.json or {}
+    username = data.get('username', '').strip()
     date_str = data.get('date', '').strip()
     meal = data.get('meal', '').strip()
     dishes = data.get('dishes', [])
 
+    if not username:
+        return jsonify({"success": False, "message": "请先输入昵称"}), 400
     if not date_str or meal not in ('breakfast', 'lunch', 'dinner'):
         return jsonify({"success": False, "message": "参数无效"}), 400
     if not isinstance(dishes, list):
         return jsonify({"success": False, "message": "菜品格式无效"}), 400
 
-    # 清理：去空去重
     cleaned = list(dict.fromkeys(d.strip() for d in dishes if d.strip()))
 
     logs = load_meal_logs()
-    if date_str not in logs:
-        logs[date_str] = {"breakfast": [], "lunch": [], "dinner": []}
-    logs[date_str][meal] = cleaned
+    if username not in logs:
+        logs[username] = {}
+    if date_str not in logs[username]:
+        logs[username][date_str] = {"breakfast": [], "lunch": [], "dinner": []}
+    logs[username][date_str][meal] = cleaned
 
     if save_meal_logs(logs):
         return jsonify({
@@ -1077,10 +1088,14 @@ def save_meal_log():
 
 @app.route('/api/meal-log/today', methods=['GET'])
 def get_today_meal_log():
-    """获取今天的打卡状态"""
+    """获取某用户今天的打卡状态"""
+    username = request.args.get('username', '').strip()
+    if not username:
+        return jsonify({"success": False, "message": "请先输入昵称"}), 400
     today = time.strftime("%Y-%m-%d")
     logs = load_meal_logs()
-    today_data = logs.get(today, {"breakfast": [], "lunch": [], "dinner": []})
+    user_logs = logs.get(username, {})
+    today_data = user_logs.get(today, {"breakfast": [], "lunch": [], "dinner": []})
     return jsonify({
         "success": True,
         "date": today,
@@ -1090,11 +1105,14 @@ def get_today_meal_log():
 
 @app.route('/api/meal-log/weekly-report', methods=['GET'])
 def get_weekly_report():
-    """生成过去7天的饮食报告"""
+    """生成某用户过去7天的饮食报告"""
+    username = request.args.get('username', '').strip()
+    if not username:
+        return jsonify({"success": False, "message": "请先输入昵称"}), 400
     logs = load_meal_logs()
+    user_logs = logs.get(username, {})
     today = datetime.date.today()
 
-    # 合并用户标签与内置标签
     user_tags = load_user_dish_tags()
     merged_tags = {**user_tags, **FOOD_TAGS}
 
@@ -1109,7 +1127,7 @@ def get_weekly_report():
     for i in range(6, -1, -1):
         day = today - datetime.timedelta(days=i)
         day_str = day.strftime("%Y-%m-%d")
-        day_data = logs.get(day_str, {"breakfast": [], "lunch": [], "dinner": []})
+        day_data = user_logs.get(day_str, {"breakfast": [], "lunch": [], "dinner": []})
 
         day_meals = 0
         day_dish_count = 0
@@ -1122,7 +1140,6 @@ def get_weekly_report():
                     day_dish_count += 1
                     total_dishes += 1
                     dish_counter[dish] = dish_counter.get(dish, 0) + 1
-                    # 分类统计
                     if dish in merged_tags:
                         for tag in merged_tags[dish]:
                             category_counter[tag] = category_counter.get(tag, 0) + 1
@@ -1138,16 +1155,15 @@ def get_weekly_report():
             "dish_count": day_dish_count
         })
 
-    # Top 5 最常吃
     sorted_dishes = sorted(dish_counter.items(), key=lambda x: x[1], reverse=True)[:5]
     top_dishes = [{"name": name, "count": count} for name, count in sorted_dishes]
 
-    # Top 8 营养分类
     sorted_cats = sorted(category_counter.items(), key=lambda x: x[1], reverse=True)[:8]
     category_distribution = {cat: count for cat, count in sorted_cats}
 
     return jsonify({
         "success": True,
+        "username": username,
         "days_checked_in": days_checked_in,
         "total_meals": total_meals,
         "total_dishes": total_dishes,
@@ -1155,6 +1171,18 @@ def get_weekly_report():
         "category_distribution": category_distribution,
         "daily_summary": daily_summary,
         "meal_completion": meal_completion
+    })
+
+
+@app.route('/api/meal-log/users', methods=['GET'])
+def get_meal_log_users():
+    """返回所有有打卡记录的用户名列表"""
+    logs = load_meal_logs()
+    users = [name for name in logs.keys() if isinstance(logs[name], dict)]
+    return jsonify({
+        "success": True,
+        "users": sorted(users),
+        "total": len(users)
     })
 
 

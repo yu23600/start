@@ -1,4 +1,4 @@
-# v8 - 三餐打卡 + 周饮食报告
+# v9 - 打卡记录用户隔离
 services:
   - type: web
     name: cafeteria-recommender

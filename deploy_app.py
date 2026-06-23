@@ -30,6 +30,18 @@ CORS(app)
 # ========== 配置 ==========
 DATA_FILE = os.path.join(BASE_DIR, 'chimei', 'cafeteria_data.json')
 
+# ========== 主食/通用词汇过滤 ==========
+STAPLE_FOODS = {
+    "米饭", "馒头", "花卷", "面条", "包子", "饺子", "馄饨",
+    "白粥", "稀饭", "小米粥", "八宝粥",
+    "面包", "蛋糕", "饼干",
+    "炒饭", "炒面", "炒粉",
+}
+
+def filter_staples(items):
+    """过滤掉主食和通用词汇"""
+    return [item for item in items if item not in STAPLE_FOODS]
+
 # ========== 营养规则库 ==========
 NUTRITION_RULES = {
     "儿童(<12岁)": {
@@ -405,8 +417,9 @@ def random_recommend(school_name):
     if not menu:
         return jsonify({"success": False, "message": "菜单为空"}), 400
     items = [item.strip() for item in menu.split("\n") if item.strip()]
+    items = filter_staples(items)
     if not items:
-        return jsonify({"success": False, "message": "没有可用菜品"}), 400
+        return jsonify({"success": False, "message": "没有可用菜品（已自动过滤主食）"}), 400
     result = random.choice(items)
     return jsonify({
         "success": True,
@@ -434,8 +447,9 @@ def smart_recommend():
     if not menu:
         return jsonify({"success": False, "message": "菜单为空"}), 400
     items = [item.strip() for item in menu.split("\n") if item.strip()]
+    items = filter_staples(items)
     if not items:
-        return jsonify({"success": False, "message": "没有可用菜品"}), 400
+        return jsonify({"success": False, "message": "没有可用菜品（已自动过滤主食）"}), 400
 
     prefer_tags = []
     avoid_tags = []
@@ -680,15 +694,16 @@ def api_fetch_dishes():
 
     if school_name in CURATED_DATABASE:
         info = CURATED_DATABASE[school_name]
+        filtered_dishes = filter_staples(info["dishes"])
         return jsonify({
             "success": True,
             "school": school_name,
-            "dishes": info["dishes"],
+            "dishes": filtered_dishes,
             "source": "curated",
             "source_desc": info["source"],
             "confidence": info["confidence"],
             "note": "数据来自公开文章整理，建议核实",
-            "dish_count": len(info["dishes"])
+            "dish_count": len(filtered_dishes)
         })
 
     return jsonify({

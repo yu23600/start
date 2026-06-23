@@ -1,4 +1,4 @@
-# v2 - redeploy with data export/import
+# v3 - smart recommend: 12 conditions, FOOD_TAGS dual scoring, tag_matches
 services:
   - type: web
     name: cafeteria-recommender

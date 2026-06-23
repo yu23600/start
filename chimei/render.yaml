@@ -1,4 +1,4 @@
-# v5 - cache body data in localStorage, add 5 new conditions to frontend
+# v6 - 众包打标机制
 services:
   - type: web
     name: cafeteria-recommender

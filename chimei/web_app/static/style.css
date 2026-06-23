@@ -881,3 +881,91 @@ body {
         min-height: 120px;
     }
 }
+
+/* ========== 众包打标 ========== */
+.tagging-progress-bar {
+    height: 6px;
+    background: #e0e0e0;
+    border-radius: 3px;
+    overflow: hidden;
+    margin-bottom: 5px;
+}
+
+.tagging-progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #667eea, #764ba2);
+    transition: width 0.3s ease;
+    border-radius: 3px;
+}
+
+.tagging-dish-name {
+    text-align: center;
+    font-size: 1.5em;
+    font-weight: bold;
+    color: #333;
+    padding: 15px;
+    background: linear-gradient(135deg, #e3f2fd, #bbdefb);
+    border-radius: 10px;
+    margin: 10px 0;
+}
+
+.tag-category-title {
+    font-weight: bold;
+    color: #555;
+    margin: 12px 0 6px;
+    font-size: 0.95em;
+}
+
+.tag-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.tag-chip {
+    padding: 8px 16px;
+    border: 2px solid #ddd;
+    border-radius: 20px;
+    background: #fff;
+    cursor: pointer;
+    font-size: 0.9em;
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    transition: all 0.2s ease;
+    user-select: none;
+}
+
+.tag-chip:hover {
+    border-color: #667eea;
+    background: #f0f4ff;
+}
+
+.tag-chip.selected {
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    color: #fff;
+    border-color: #667eea;
+}
+
+.tag-chip.selected:hover {
+    background: linear-gradient(135deg, #5a6fd6, #6a3fa0);
+}
+
+@media (max-width: 480px) {
+    .tag-chip {
+        min-height: 48px;
+        padding: 10px 14px;
+        font-size: 0.95em;
+    }
+
+    #fetcherStep3 .btn {
+        flex: 1;
+        min-width: 0;
+        font-size: 0.85em;
+    }
+
+    .tagging-dish-name {
+        font-size: 1.3em;
+        padding: 12px;
+    }
+}

@@ -30,6 +30,7 @@ CORS(app)
 
 # ========== 配置 ==========
 DATA_FILE = os.path.join(BASE_DIR, 'cafeteria_data.json')
+USER_TAGS_FILE = os.path.join(BASE_DIR, 'user_dish_tags.json')
 
 # ========== 营养规则库 ==========
 NUTRITION_RULES = {
@@ -236,6 +237,43 @@ def dish_has_meat(dish_name):
         if tag_matches(kw, dish_name):
             return True
     return False
+
+
+# ========== 众包标签体系 ==========
+TAG_TAXONOMY = {
+    "蛋白质": ["鸡肉", "猪肉", "牛肉", "鱼", "豆制品"],
+    "蔬菜": ["蔬菜", "菌菇", "根茎类"],
+    "烹饪方式": ["清淡", "油炸", "辛辣", "糖醋"],
+    "营养特征": ["高蛋白", "高纤维", "低脂", "高脂", "高糖", "易消化", "碳水", "汤"]
+}
+
+ALL_VALID_TAGS = set()
+for _tags in TAG_TAXONOMY.values():
+    ALL_VALID_TAGS.update(_tags)
+
+
+def load_user_dish_tags():
+    """加载用户提交的菜品标签"""
+    if not os.path.exists(USER_TAGS_FILE):
+        return {}
+    try:
+        with open(USER_TAGS_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return data if isinstance(data, dict) else {}
+    except Exception as e:
+        print(f"加载用户标签出错: {e}")
+        return {}
+
+
+def save_user_dish_tags(tags):
+    """保存用户提交的菜品标签"""
+    try:
+        with open(USER_TAGS_FILE, "w", encoding="utf-8") as f:
+            json.dump(tags, f, ensure_ascii=False, indent=2)
+        return True
+    except Exception as e:
+        print(f"保存用户标签出错: {e}")
+        return False
 
 
 # ========== 精选菜品数据库 ==========
@@ -679,15 +717,33 @@ def smart_recommend():
             continue
         filtered_items.append(item)
 
+    # 合并用户标签与内置FOOD_TAGS（内置优先）
+    user_tags = load_user_dish_tags()
+    merged_tags = {**user_tags, **FOOD_TAGS}
+
+    # 双通道评分：merged_tags精确匹配(权重2) + 名称关键词匹配(权重1)
     scored_items = []
     match_details = {}
     for item in filtered_items:
         score = 0
         matches = []
+
+        # 通道1：merged_tags精确匹配（权重2）
+        if item in merged_tags:
+            item_tags = merged_tags[item]
+            for tag in prefer_tags:
+                if tag in item_tags:
+                    score += 2
+                    if tag not in matches:
+                        matches.append(tag)
+
+        # 通道2：名称关键词匹配（权重1）
         for tag in prefer_tags:
-            if tag in item:
+            if tag_matches(tag, item):
                 score += 1
-                matches.append(tag)
+                if tag not in matches:
+                    matches.append(tag)
+
         scored_items.append((item, score))
         if score > 0:
             match_details[item] = matches
@@ -892,6 +948,62 @@ def get_supported_schools():
         "success": True,
         "schools": schools,
         "total": len(schools)
+    })
+
+
+# ========== 菜品标签 API ==========
+@app.route('/api/dish-tags/taxonomy', methods=['GET'])
+def get_tag_taxonomy():
+    """返回标签分类体系供前端渲染"""
+    return jsonify({
+        "success": True,
+        "taxonomy": TAG_TAXONOMY,
+        "all_tags": list(ALL_VALID_TAGS)
+    })
+
+
+@app.route('/api/dish-tags/save', methods=['POST'])
+def save_dish_tags():
+    """保存用户提交的菜品标签（合并模式）"""
+    new_tags = request.json.get('tags', {})
+    if not isinstance(new_tags, dict):
+        return jsonify({"success": False, "message": "标签格式无效"}), 400
+
+    # 验证：过滤无效标签
+    cleaned = {}
+    for dish, tags in new_tags.items():
+        dish = dish.strip()
+        if not dish or not isinstance(tags, list):
+            continue
+        valid = [t for t in tags if t in ALL_VALID_TAGS]
+        if valid:
+            cleaned[dish] = valid
+
+    if not cleaned:
+        return jsonify({"success": False, "message": "没有有效的标签"}), 400
+
+    # 加载已有标签，合并，保存
+    user_tags = load_user_dish_tags()
+    user_tags.update(cleaned)
+
+    if save_user_dish_tags(user_tags):
+        return jsonify({
+            "success": True,
+            "message": f"已保存 {len(cleaned)} 道菜品的标签",
+            "count": len(cleaned)
+        })
+    else:
+        return jsonify({"success": False, "message": "保存失败"}), 500
+
+
+@app.route('/api/dish-tags/all', methods=['GET'])
+def get_all_dish_tags():
+    """返回所有用户提交的菜品标签"""
+    user_tags = load_user_dish_tags()
+    return jsonify({
+        "success": True,
+        "tags": user_tags,
+        "count": len(user_tags)
     })
 
 

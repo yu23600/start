@@ -858,6 +858,10 @@ async function importData(event) {
 // ========== 菜品自动获取功能 ==========
 let fetchedDishes = [];
 let fetchResultInfo = {};
+let taggingDishes = [];
+let taggingIndex = 0;
+let taggingTags = {};
+let tagTaxonomy = null;
 
 function showDishFetcher() {
     if (!currentSchool) {
@@ -870,11 +874,16 @@ function showDishFetcher() {
 
     document.getElementById('fetcherStep1').style.display = 'block';
     document.getElementById('fetcherStep2').style.display = 'none';
+    document.getElementById('fetcherStep3').style.display = 'none';
     document.getElementById('fetcherLoading').style.display = 'none';
     document.getElementById('fetcherError').style.display = 'none';
     document.getElementById('fetcherActionBtn').textContent = '开始获取';
     document.getElementById('fetcherActionBtn').onclick = startFetchDishes;
     document.getElementById('extraDishes').value = '';
+
+    // 移除可能存在的"跳过标注"按钮
+    const skipBtn = document.getElementById('skipTaggingBtn');
+    if (skipBtn) skipBtn.remove();
 
     document.getElementById('fetcherSubtitle').textContent = `为「${currentSchool}」自动获取菜品数据`;
 
@@ -884,8 +893,15 @@ function showDishFetcher() {
 
 function closeDishFetcher() {
     document.getElementById('dishFetcherModal').classList.remove('show');
+    document.getElementById('fetcherStep3').style.display = 'none';
     fetchedDishes = [];
     fetchResultInfo = {};
+    taggingDishes = [];
+    taggingIndex = 0;
+    taggingTags = {};
+    // 移除跳过标注按钮
+    const skipBtn = document.getElementById('skipTaggingBtn');
+    if (skipBtn) skipBtn.remove();
 }
 
 async function startFetchDishes() {
@@ -949,8 +965,21 @@ function showDishReviewStep() {
     updateSelectedCount();
 
     const actionBtn = document.getElementById('fetcherActionBtn');
-    actionBtn.textContent = '确认并保存到菜单';
-    actionBtn.onclick = confirmAndSaveDishes;
+    actionBtn.textContent = '💡 保存并开始标注';
+    actionBtn.onclick = () => confirmAndSaveDishes(true);
+
+    // 添加"跳过标注"按钮
+    const footer = document.getElementById('fetcherFooter');
+    let skipBtn = document.getElementById('skipTaggingBtn');
+    if (!skipBtn) {
+        skipBtn = document.createElement('button');
+        skipBtn.id = 'skipTaggingBtn';
+        skipBtn.className = 'btn btn-secondary btn-large';
+        footer.insertBefore(skipBtn, footer.querySelector('#fetcherActionBtn').nextSibling);
+    }
+    skipBtn.textContent = '跳过标注';
+    skipBtn.onclick = () => confirmAndSaveDishes(false);
+    skipBtn.style.display = '';
 }
 
 function renderDishChecklist() {
@@ -998,7 +1027,7 @@ function updateSelectedCount() {
     document.getElementById('selectedCount').textContent = `已选 ${checked} / ${fetchedDishes.length}`;
 }
 
-async function confirmAndSaveDishes() {
+async function confirmAndSaveDishes(proceedToTagging = false) {
     const selectedDishes = fetchedDishes.filter((_, index) => {
         const cb = document.getElementById(`dish-cb-${index}`);
         return cb && cb.checked;
@@ -1029,7 +1058,12 @@ async function confirmAndSaveDishes() {
             document.getElementById('menuText').value = data.menu;
             document.getElementById('itemCount').textContent = `(${data.count} 项)`;
             showNotification(`已成功保存 ${data.count} 道菜品到 ${currentSchool}！`, 'success');
-            closeDishFetcher();
+
+            if (proceedToTagging) {
+                startTagging(selectedDishes);
+            } else {
+                closeDishFetcher();
+            }
         } else {
             showNotification(data.message, 'error');
         }
@@ -1037,4 +1071,138 @@ async function confirmAndSaveDishes() {
         console.error('保存菜品失败:', error);
         showNotification('保存失败', 'error');
     }
+}
+
+// ========== 众包打标功能 ==========
+async function startTagging(dishes) {
+    // 隐藏 Step 2，显示 Step 3
+    document.getElementById('fetcherStep2').style.display = 'none';
+    document.getElementById('fetcherStep3').style.display = 'block';
+    // 隐藏 footer 按钮（标注步骤不需要）
+    document.getElementById('fetcherFooter').style.display = 'none';
+
+    taggingDishes = dishes;
+    taggingIndex = 0;
+    taggingTags = {};
+    dishes.forEach(d => { taggingTags[d] = []; });
+
+    // 获取标签分类体系
+    try {
+        const resp = await fetch('/api/dish-tags/taxonomy');
+        const data = await resp.json();
+        if (data.success) {
+            tagTaxonomy = data.taxonomy;
+        } else {
+            showNotification('加载标签分类失败', 'warning');
+            closeDishFetcher();
+            return;
+        }
+    } catch (e) {
+        console.error('获取标签分类失败:', e);
+        showNotification('加载标签分类失败', 'error');
+        closeDishFetcher();
+        return;
+    }
+
+    renderTaggingDish();
+}
+
+function renderTaggingDish() {
+    if (taggingDishes.length === 0) return;
+
+    const dish = taggingDishes[taggingIndex];
+    const total = taggingDishes.length;
+
+    // 进度条
+    const pct = ((taggingIndex + 1) / total * 100).toFixed(0);
+    document.getElementById('taggingProgress').style.width = pct + '%';
+    document.getElementById('taggingProgressText').textContent = `第 ${taggingIndex + 1} 道 / 共 ${total} 道`;
+
+    // 菜名
+    document.getElementById('taggingDishName').textContent = dish;
+
+    // 导航按钮状态
+    document.getElementById('tagPrevBtn').disabled = taggingIndex === 0;
+    document.getElementById('tagNextBtn').textContent = taggingIndex === total - 1 ? '下一道 ➡' : '下一道 ➡';
+
+    // 标签分类
+    const container = document.getElementById('taggingCategories');
+    const currentTags = taggingTags[dish] || [];
+    let html = '';
+
+    for (const [category, tags] of Object.entries(tagTaxonomy)) {
+        html += `<div class="tag-category-title">${category}</div>`;
+        html += '<div class="tag-chips">';
+        for (const tag of tags) {
+            const selected = currentTags.includes(tag) ? ' selected' : '';
+            html += `<div class="tag-chip${selected}" onclick="toggleTagForDish('${tag}')">${tag}</div>`;
+        }
+        html += '</div>';
+    }
+
+    container.innerHTML = html;
+}
+
+function toggleTagForDish(tag) {
+    const dish = taggingDishes[taggingIndex];
+    if (!taggingTags[dish]) taggingTags[dish] = [];
+
+    const idx = taggingTags[dish].indexOf(tag);
+    if (idx >= 0) {
+        taggingTags[dish].splice(idx, 1);
+    } else {
+        taggingTags[dish].push(tag);
+    }
+
+    renderTaggingDish();
+}
+
+function taggingNavigate(delta) {
+    const newIndex = taggingIndex + delta;
+    if (newIndex >= 0 && newIndex < taggingDishes.length) {
+        taggingIndex = newIndex;
+        renderTaggingDish();
+    }
+}
+
+function taggingSkip() {
+    // 跳到最后一道之后，直接完成
+    finishTagging();
+}
+
+async function finishTagging() {
+    // 过滤掉没有标注任何标签的菜品
+    const tagsToSave = {};
+    for (const [dish, tags] of Object.entries(taggingTags)) {
+        if (tags.length > 0) {
+            tagsToSave[dish] = tags;
+        }
+    }
+
+    const taggedCount = Object.keys(tagsToSave).length;
+
+    if (taggedCount > 0) {
+        try {
+            const resp = await fetch('/api/dish-tags/save', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ tags: tagsToSave })
+            });
+            const data = await resp.json();
+            if (data.success) {
+                showNotification(`已保存 ${taggedCount} 道菜品的标签，推荐引擎将更准确！`, 'success');
+            } else {
+                showNotification(data.message || '保存标签失败', 'warning');
+            }
+        } catch (e) {
+            console.error('保存标签失败:', e);
+            showNotification('保存标签失败', 'error');
+        }
+    } else {
+        showNotification('未标注任何标签，已跳过', 'info');
+    }
+
+    // 恢复 footer 并关闭弹窗
+    document.getElementById('fetcherFooter').style.display = '';
+    closeDishFetcher();
 }

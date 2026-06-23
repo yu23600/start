@@ -1,26 +1,23 @@
 """
-智能食堂菜品推荐系统 - 合并部署版
+智能食堂菜品推荐系统 - 吃了么
 =====================================
-将 Web 前端和云端 API 合并为单个 Flask 应用，方便部署到云平台（如 Render）。
+将 Web 前端和后端 API 合并为单个 Flask 应用，方便部署到云平台（如 Render）。
 
 功能：
 - Web 前端界面（菜品管理、智能推荐）
-- 云端数据同步 API（上传/下载/点赞/统计）
 - 菜品自动获取（从精选数据库）
+- 本地数据管理（JSON 存储）
 
 部署到 Render 时：
 - 使用环境变量 PORT（Render 自动注入）
-- SQLite 数据库存储在 /data 目录（Render 持久化磁盘）
 """
 
 from flask import Flask, render_template, request, jsonify, send_from_directory
 from flask_cors import CORS
-import sqlite3
 import json
 import os
 import random
 import time
-from datetime import datetime
 
 # ========== 基础路径配置 ==========
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -32,13 +29,6 @@ CORS(app)
 
 # ========== 配置 ==========
 DATA_FILE = os.path.join(BASE_DIR, 'cafeteria_data.json')
-
-# Render 持久化磁盘路径（免费计划有 /data 目录）
-RENDER_DATA_DIR = '/data'
-if os.path.exists(RENDER_DATA_DIR):
-    DATABASE = os.path.join(RENDER_DATA_DIR, 'cafeteria_cloud.db')
-else:
-    DATABASE = os.path.join(BASE_DIR, 'cafeteria_cloud.db')
 
 # ========== 营养规则库 ==========
 NUTRITION_RULES = {
@@ -231,6 +221,22 @@ CURATED_DATABASE = {
         "source": "多篇宁德师范学院食堂美食攻略文章综合整理",
         "confidence": "medium"
     },
+    "福建医科大学": {
+        "dishes": [
+            "竹筒饭", "连江锅边", "福鼎肉片", "农家烤鱼",
+            "重庆鸡公煲", "陕西凉皮", "沙茶面", "莆田打卤面",
+            "牛肉面", "瓦罐汤", "刀削面", "小炒",
+            "炒泗粉", "炒米粉", "卤面套餐", "鱼丸", "肉燕",
+            "捞化", "拌面", "扁肉", "卤味", "豆花",
+            "烧仙草", "西米露", "拌粉干", "沙县小吃",
+            "红烧肉", "宫保鸡丁", "麻婆豆腐", "西红柿炒蛋",
+            "回锅肉", "水煮肉片", "清炒时蔬", "酸辣土豆丝",
+            "糖醋排骨", "酸菜鱼", "鱼香肉丝", "地三鲜",
+            "米饭", "馒头", "花卷", "面条"
+        ],
+        "source": "多篇福建医科大学食堂美食文章及点评综合整理",
+        "confidence": "medium"
+    },
 }
 
 
@@ -276,50 +282,6 @@ def add_default_school(data):
     }
     save_all_data(data)
     return default_school
-
-
-# ========== 云端数据库管理 ==========
-def init_db():
-    """初始化SQLite数据库"""
-    os.makedirs(os.path.dirname(DATABASE), exist_ok=True)
-    conn = sqlite3.connect(DATABASE)
-    cursor = conn.cursor()
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS school_menus (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            school_name TEXT UNIQUE NOT NULL,
-            menu_content TEXT NOT NULL,
-            available_items TEXT DEFAULT '',
-            contributor TEXT DEFAULT 'anonymous',
-            version INTEGER DEFAULT 1,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            download_count INTEGER DEFAULT 0,
-            likes INTEGER DEFAULT 0
-        )
-    ''')
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS upload_logs (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            contributor_id TEXT NOT NULL,
-            school_name TEXT NOT NULL,
-            upload_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            ip_address TEXT
-        )
-    ''')
-    cursor.execute('CREATE INDEX IF NOT EXISTS idx_school_name ON school_menus(school_name)')
-    cursor.execute('CREATE INDEX IF NOT EXISTS idx_contributor ON school_menus(contributor)')
-    cursor.execute('CREATE INDEX IF NOT EXISTS idx_updated_at ON school_menus(updated_at DESC)')
-    conn.commit()
-    conn.close()
-    print("✅ 数据库初始化成功")
-
-
-def get_db_connection():
-    """获取数据库连接"""
-    conn = sqlite3.connect(DATABASE)
-    conn.row_factory = sqlite3.Row
-    return conn
 
 
 # ========== Web 前端路由 ==========
@@ -623,6 +585,65 @@ def calculate_bmi():
     })
 
 
+# ========== 数据导出/导入 API ==========
+@app.route('/api/data/export', methods=['GET'])
+def export_data():
+    """导出所有数据为JSON"""
+    data = load_all_data()
+    return jsonify({
+        "success": True,
+        "data": data,
+        "export_time": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "school_count": len(data)
+    })
+
+
+@app.route('/api/data/import', methods=['POST'])
+def import_data():
+    """从JSON数据导入（合并模式）"""
+    import_schools = request.json.get('schools', {})
+    if not import_schools or not isinstance(import_schools, dict):
+        return jsonify({"success": False, "message": "没有可导入的数据"}), 400
+
+    data = load_all_data()
+    added = []
+    updated = []
+
+    for school_name, school_data in import_schools.items():
+        if not isinstance(school_data, dict):
+            continue
+        menu = school_data.get("menu", "")
+        if not menu:
+            continue
+
+        if school_name in data:
+            # 合并菜品，去重
+            existing_menu = data[school_name].get("menu", "")
+            existing_items = set(item.strip() for item in existing_menu.split("\n") if item.strip())
+            new_items = [item.strip() for item in menu.split("\n") if item.strip() and item.strip() not in existing_items]
+            if new_items:
+                merged = existing_menu + "\n" + "\n".join(new_items)
+                data[school_name]["menu"] = merged
+                data[school_name]["last_modified"] = time.strftime("%Y-%m-%d %H:%M")
+                updated.append(school_name)
+        else:
+            data[school_name] = {
+                "menu": menu,
+                "last_modified": time.strftime("%Y-%m-%d %H:%M")
+            }
+            added.append(school_name)
+
+    if save_all_data(data):
+        return jsonify({
+            "success": True,
+            "message": f"导入完成！新增 {len(added)} 个学校，更新 {len(updated)} 个学校",
+            "added": added,
+            "updated": updated
+        })
+    else:
+        return jsonify({"success": False, "message": "保存数据失败"}), 500
+
+
 # ========== 菜品自动获取 API ==========
 @app.route('/api/dish-sources', methods=['GET'])
 def get_dish_sources():
@@ -695,241 +716,6 @@ def get_supported_schools():
     })
 
 
-# ========== 云端同步 API ==========
-@app.route('/api/upload', methods=['POST'])
-def upload_data():
-    """上传学校菜单数据到云端"""
-    try:
-        data = request.json
-        if not data or 'schools' not in data:
-            return jsonify({
-                "success": False,
-                "message": "请求数据格式错误，需要包含 'schools' 字段"
-            }), 400
-
-        schools_data = data['schools']
-        contributor_id = data.get('contributor_id', 'anonymous')
-
-        if not isinstance(schools_data, dict):
-            return jsonify({
-                "success": False,
-                "message": "'schools' 必须是对象格式"
-            }), 400
-
-        conn = get_db_connection()
-        cursor = conn.cursor()
-
-        uploaded_count = 0
-        updated_count = 0
-        skipped_count = 0
-
-        for school_name, school_info in schools_data.items():
-            if not school_name or not school_info:
-                continue
-
-            if isinstance(school_info, dict):
-                menu_content = school_info.get('menu', '')
-                available_items = json.dumps(school_info.get('available_items', []), ensure_ascii=False)
-            else:
-                menu_content = str(school_info)
-                available_items = ''
-
-            cursor.execute('SELECT id, version FROM school_menus WHERE school_name = ?', (school_name,))
-            existing = cursor.fetchone()
-
-            if existing:
-                cursor.execute('''
-                    UPDATE school_menus 
-                    SET menu_content = ?, 
-                        available_items = ?,
-                        contributor = ?,
-                        version = version + 1,
-                        updated_at = CURRENT_TIMESTAMP
-                    WHERE school_name = ?
-                ''', (menu_content, available_items, contributor_id, school_name))
-                updated_count += 1
-            else:
-                cursor.execute('''
-                    INSERT INTO school_menus (school_name, menu_content, available_items, contributor)
-                    VALUES (?, ?, ?, ?)
-                ''', (school_name, menu_content, available_items, contributor_id))
-                uploaded_count += 1
-
-            cursor.execute('''
-                INSERT INTO upload_logs (contributor_id, school_name, ip_address)
-                VALUES (?, ?, ?)
-            ''', (contributor_id, school_name, request.remote_addr))
-
-        conn.commit()
-        conn.close()
-
-        return jsonify({
-            "success": True,
-            "message": "上传成功",
-            "stats": {
-                "uploaded": uploaded_count,
-                "updated": updated_count,
-                "skipped": skipped_count,
-                "total": uploaded_count + updated_count
-            },
-            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        })
-
-    except Exception as e:
-        return jsonify({
-            "success": False,
-            "message": f"上传失败: {str(e)}"
-        }), 500
-
-
-@app.route('/api/download', methods=['POST'])
-def download_data():
-    """批量下载/同步云端数据"""
-    try:
-        data = request.json or {}
-        last_sync_time = data.get('last_sync_time', None)
-        school_name = data.get('school_name', None)
-
-        conn = get_db_connection()
-        cursor = conn.cursor()
-
-        if school_name:
-            if last_sync_time:
-                cursor.execute('''
-                    SELECT * FROM school_menus 
-                    WHERE school_name = ? AND updated_at > ?
-                    ORDER BY updated_at DESC
-                ''', (school_name, last_sync_time))
-            else:
-                cursor.execute('''
-                    SELECT * FROM school_menus 
-                    WHERE school_name = ?
-                    ORDER BY updated_at DESC
-                ''', (school_name,))
-        else:
-            if last_sync_time:
-                cursor.execute('''
-                    SELECT * FROM school_menus 
-                    WHERE updated_at > ?
-                    ORDER BY updated_at DESC
-                ''', (last_sync_time,))
-            else:
-                cursor.execute('''
-                    SELECT * FROM school_menus 
-                    ORDER BY updated_at DESC
-                ''')
-
-        schools = {}
-        for row in cursor.fetchall():
-            schools[row["school_name"]] = {
-                "menu": row["menu_content"],
-                "available_items": json.loads(row["available_items"]) if row["available_items"] else [],
-                "contributor": row["contributor"],
-                "version": row["version"],
-                "updated_at": row["updated_at"]
-            }
-
-        conn.close()
-
-        return jsonify({
-            "success": True,
-            "count": len(schools),
-            "schools": schools,
-            "server_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "sync_type": "incremental" if last_sync_time else "full",
-            "filtered_by_school": school_name is not None
-        })
-
-    except Exception as e:
-        return jsonify({
-            "success": False,
-            "message": f"下载失败: {str(e)}"
-        }), 500
-
-
-@app.route('/api/like/<school_name>', methods=['POST'])
-def like_school(school_name):
-    """给某个学校的菜单点赞"""
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute('SELECT id FROM school_menus WHERE school_name = ?', (school_name,))
-        if not cursor.fetchone():
-            conn.close()
-            return jsonify({
-                "success": False,
-                "message": f"学校 '{school_name}' 不存在"
-            }), 404
-        cursor.execute('UPDATE school_menus SET likes = likes + 1 WHERE school_name = ?', (school_name,))
-        cursor.execute('SELECT likes FROM school_menus WHERE school_name = ?', (school_name,))
-        likes = cursor.fetchone()["likes"]
-        conn.commit()
-        conn.close()
-        return jsonify({
-            "success": True,
-            "likes": likes,
-            "message": "点赞成功"
-        })
-    except Exception as e:
-        return jsonify({
-            "success": False,
-            "message": f"点赞失败: {str(e)}"
-        }), 500
-
-
-@app.route('/api/stats', methods=['GET'])
-def get_stats():
-    """获取云端统计数据"""
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-
-        cursor.execute('SELECT COUNT(*) as count FROM school_menus')
-        school_count = cursor.fetchone()["count"]
-
-        cursor.execute('SELECT COUNT(*) as count FROM upload_logs')
-        upload_count = cursor.fetchone()["count"]
-
-        cursor.execute('''
-            SELECT DATE(upload_time) as date, COUNT(*) as count
-            FROM upload_logs
-            WHERE upload_time >= DATE('now', '-7 days')
-            GROUP BY DATE(upload_time)
-            ORDER BY date DESC
-        ''')
-        recent_uploads = [{"date": row["date"], "count": row["count"]} for row in cursor.fetchall()]
-
-        cursor.execute('''
-            SELECT school_name, likes, download_count
-            FROM school_menus
-            ORDER BY likes DESC
-            LIMIT 10
-        ''')
-        popular_schools = [{
-            "school_name": row["school_name"],
-            "likes": row["likes"],
-            "download_count": row["download_count"]
-        } for row in cursor.fetchall()]
-
-        conn.close()
-
-        return jsonify({
-            "success": True,
-            "stats": {
-                "total_schools": school_count,
-                "total_uploads": upload_count,
-                "recent_uploads": recent_uploads,
-                "popular_schools": popular_schools
-            }
-        })
-
-    except Exception as e:
-        return jsonify({
-            "success": False,
-            "message": f"获取统计数据失败: {str(e)}"
-        }), 500
-
-
 # ========== 错误处理 ==========
 @app.errorhandler(404)
 def not_found(error):
@@ -950,11 +736,8 @@ def internal_error(error):
 # ========== 启动入口 ==========
 if __name__ == '__main__':
     print("=" * 60)
-    print("🚀 智能食堂菜品推荐系统 - 合并部署版")
+    print("🚀 智能食堂菜品推荐系统 - 吃了么")
     print("=" * 60)
-
-    # 初始化数据库
-    init_db()
 
     # 确保数据文件存在
     if not os.path.exists(DATA_FILE):
@@ -965,7 +748,6 @@ if __name__ == '__main__':
 
     print(f"\n📡 服务地址: http://0.0.0.0:{port}")
     print(f"📊 Web前端: http://localhost:{port}/")
-    print(f" 云端API: http://localhost:{port}/api/upload")
     print(f"\n 部署到 Render 后，手机可通过公网URL访问\n")
     print("=" * 60)
 

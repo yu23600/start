@@ -55,17 +55,10 @@
                     <button onclick="randomRecommend()" class="btn btn-success">随机推荐一个菜品</button>
                     <button onclick="showDishFetcher()" class="btn btn-info">🔍 自动获取菜品</button>
                 </div>
-                
-                <!-- 云端同步区域 -->
-                <div class="cloud-sync-section">
-                    <h3 class="section-title">☁️ 云端数据同步</h3>
-                    <p class="hint">将本地数据上传到云端服务器，或从云端下载最新数据</p>
-                    <div class="action-buttons">
-                        <button onclick="uploadToCloud()" class="btn btn-info">⬆️ 上传到云端</button>
-                        <button onclick="downloadFromCloud()" class="btn btn-warning">⬇️ 从云端下载</button>
-                        <button onclick="showCloudStats()" class="btn btn-secondary">📊 查看云端统计</button>
-                    </div>
-                    <div id="cloudStatus" class="cloud-status"></div>
+                <div class="action-buttons" style="margin-top: 8px;">
+                    <button onclick="exportData()" class="btn btn-secondary">📤 导出数据</button>
+                    <button onclick="document.getElementById('importFileInput').click()" class="btn btn-secondary">📥 导入数据</button>
+                    <input type="file" id="importFileInput" accept=".json" style="display:none;" onchange="importData(event)">
                 </div>
             </div>
         </div>

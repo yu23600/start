@@ -154,11 +154,11 @@ function showAddSchoolDialog() {
                 const data = await response.json();
                 
                 if (data.success || response.status === 400) {
-                    await loadSchools();
-                    document.getElementById('schoolSelect').value = schoolName;
                     currentSchool = schoolName;
+                    localStorage.setItem('current_school', schoolName);
                     document.getElementById('menuText').value = '';
                     document.getElementById('itemCount').textContent = '(0 项)';
+                    updateSchoolDisplay();
                     if (data.success) {
                         showNotification(`学校 '${schoolName}' 创建成功！`, 'success');
                     } else {
@@ -216,9 +216,10 @@ function showRenameSchoolDialog() {
                 const data = await response.json();
                 
                 if (data.success) {
-                    await loadSchools();
-                    document.getElementById('schoolSelect').value = newName;
                     currentSchool = newName;
+                    localStorage.setItem('current_school', newName);
+                    updateSchoolDisplay();
+                    await loadMenu();
                     showNotification(`学校名称已成功修改为 '${newName}'！`, 'success');
                 } else {
                     showNotification(data.message, 'error');
@@ -729,283 +730,71 @@ function showChangeSchoolDialog() {
     showSchoolWizard();
 }
 
-// ========== 云端同步功能 ==========
-// 使用相对路径，自动适配本地运行和云端部署
-const CLOUD_SERVER_URL = '';
-
-/**
- * 显示云端状态消息
- */
-function showCloudStatus(message, type = 'info') {
-    const statusDiv = document.getElementById('cloudStatus');
-    statusDiv.textContent = message;
-    statusDiv.className = `cloud-status show ${type}`;
-    
-    // 5秒后自动隐藏
-    setTimeout(() => {
-        statusDiv.classList.remove('show');
-    }, 5000);
-}
-
-/**
- * 上传数据到云端服务器
- */
-async function uploadToCloud() {
+// ========== 数据导出/导入功能 ==========
+async function exportData() {
     try {
-        showCloudStatus('正在准备上传数据...', 'info');
-        
-        // 获取所有学校数据
-        const response = await fetch('/api/schools');
-        const data = await response.json();
-        
-        if (!data.success) {
-            throw new Error('获取学校列表失败');
-        }
-        
-        const schoolsData = {};
-        for (const schoolName of data.schools) {
-            const menuResponse = await fetch(`/api/menu/${encodeURIComponent(schoolName)}`);
-            const menuData = await menuResponse.json();
-            
-            if (menuData.success) {
-                schoolsData[schoolName] = {
-                    menu: menuData.menu,
-                    available_items: []
-                };
-            }
-        }
-        
-        // 上传到云端
-        const uploadResponse = await fetch(`${CLOUD_SERVER_URL}/api/upload`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                contributor_id: 'web_user_' + Date.now(),
-                schools: schoolsData
-            })
-        });
-        
-        const uploadResult = await uploadResponse.json();
-        
-        if (uploadResult.success) {
-            const stats = uploadResult.stats;
-            showCloudStatus(
-                `✅ 上传成功！新增: ${stats.uploaded}, 更新: ${stats.updated}`,
-                'success'
-            );
-            showNotification('数据已成功上传到云端！', 'success');
-        } else {
-            throw new Error(uploadResult.message);
-        }
-    } catch (error) {
-        console.error('上传失败:', error);
-        showCloudStatus(`❌ 上传失败: ${error.message}`, 'error');
-        showNotification('上传到云端失败', 'error');
-    }
-}
+        const response = await fetch('/api/data/export');
+        const result = await response.json();
 
-/**
- * 从云端下载数据
- */
-async function downloadFromCloud() {
-    try {
-        showCloudStatus('正在从云端下载数据...', 'info');
-        
-        // 获取上次同步时间（从localStorage）
-        const lastSyncTime = localStorage.getItem('last_cloud_sync_time');
-        
-        // 请求云端数据，传递当前学校名称
-        const downloadResponse = await fetch(`${CLOUD_SERVER_URL}/api/download`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                last_sync_time: lastSyncTime || null,
-                school_name: currentSchool || null  // 新增：只下载当前学校的数据
-            })
-        });
-        
-        const downloadResult = await downloadResponse.json();
-        
-        if (!downloadResult.success) {
-            throw new Error(downloadResult.message);
-        }
-        
-        const cloudSchools = downloadResult.schools;
-        const syncType = downloadResult.sync_type;
-        const filteredBySchool = downloadResult.filtered_by_school;
-        
-        if (Object.keys(cloudSchools).length === 0) {
-            if (filteredBySchool) {
-                showCloudStatus(`ℹ️ 云端没有 ${currentSchool} 的新数据`, 'info');
-            } else {
-                showCloudStatus('ℹ️ 云端没有新数据', 'info');
-            }
+        if (!result.success) {
+            showNotification('导出失败: ' + result.message, 'error');
             return;
         }
-        
-        // 智能合并数据
-        let mergedCount = 0;
-        let conflictCount = 0;
-        
-        for (const [schoolName, cloudData] of Object.entries(cloudSchools)) {
-            // 检查本地是否已有该学校
-            const localMenuResponse = await fetch(`/api/menu/${encodeURIComponent(schoolName)}`);
-            const localData = await localMenuResponse.json();
-            
-            if (localData.success && localData.menu) {
-                // 存在冲突，需要合并
-                const merged = mergeMenuData(localData.menu, cloudData.menu);
-                
-                if (merged !== localData.menu) {
-                    // 有变化，保存合并后的数据
-                    await fetch(`/api/menu/${encodeURIComponent(schoolName)}`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({ menu: merged })
-                    });
-                    
-                    conflictCount++;
-                }
-            } else {
-                // 本地没有，直接添加
-                const addResponse = await fetch('/api/school/add', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ school_name: schoolName })
-                });
-                
-                // 200=新建成功, 400=已存在（也算成功）
-                if (addResponse.ok || addResponse.status === 400) {
-                    // 保存菜单内容
-                    await fetch(`/api/menu/${encodeURIComponent(schoolName)}`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({ menu: cloudData.menu })
-                    });
-                }
-                
-                mergedCount++;
-            }
-        }
-        
-        // 更新同步时间
-        localStorage.setItem('last_cloud_sync_time', downloadResult.server_time);
-        
-        // 重新加载菜单
-        await loadMenu();
-        
-        // 显示结果
-        let message = `✅ 下载成功！`;
-        if (filteredBySchool) {
-            message += ` (${currentSchool})`;
-        }
-        if (syncType === 'incremental') {
-            message += ` (增量同步)`;
-        }
-        if (mergedCount > 0) {
-            message += ` 新增: ${mergedCount}个学校`;
-        }
-        if (conflictCount > 0) {
-            message += ` 合并: ${conflictCount}个学校`;
-        }
-        
-        showCloudStatus(message, 'success');
-        showNotification('云端数据同步完成！', 'success');
-        
+
+        const blob = new Blob([JSON.stringify(result, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `吃了么_数据备份_${new Date().toISOString().slice(0, 10)}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        showNotification(`已导出 ${result.school_count} 个学校的数据`, 'success');
     } catch (error) {
-        console.error('下载失败:', error);
-        showCloudStatus(`❌ 下载失败: ${error.message}`, 'error');
-        showNotification('从云端下载失败', 'error');
+        console.error('导出失败:', error);
+        showNotification('导出失败', 'error');
     }
 }
 
-/**
- * 智能合并菜单数据
- * 策略：保留本地和云端的所有菜品，去重
- */
-function mergeMenuData(localMenu, cloudMenu) {
-    // 将菜单转换为数组
-    const localItems = localMenu.split('\n').map(item => item.trim()).filter(item => item);
-    const cloudItems = cloudMenu.split('\n').map(item => item.trim()).filter(item => item);
-    
-    // 合并并去重
-    const mergedSet = new Set([...localItems, ...cloudItems]);
-    const mergedArray = Array.from(mergedSet);
-    
-    // 如果合并后有变化，返回合并结果
-    if (mergedArray.length > localItems.length) {
-        return mergedArray.join('\n');
-    }
-    
-    // 否则返回原数据
-    return localMenu;
-}
+async function importData(event) {
+    const file = event.target.files[0];
+    if (!file) return;
 
-/**
- * 显示云端统计信息
- */
-async function showCloudStats() {
     try {
-        showCloudStatus('正在获取云端统计...', 'info');
-        
-        const response = await fetch(`${CLOUD_SERVER_URL}/api/stats`);
-        const data = await response.json();
-        
-        if (!data.success) {
-            throw new Error(data.message);
+        const text = await file.text();
+        const parsed = JSON.parse(text);
+
+        // 支持两种格式：直接是 {学校: {menu:...}} 或 {data: {学校: {menu:...}}}
+        const schoolsData = parsed.data || parsed;
+
+        if (typeof schoolsData !== 'object' || Object.keys(schoolsData).length === 0) {
+            showNotification('文件格式不正确或没有数据', 'warning');
+            return;
         }
-        
-        const stats = data.stats;
-        
-        // 构建统计信息HTML
-        let statsHtml = `
-            <h2 style="color: #667eea; margin-bottom: 15px;">☁️ 云端数据统计</h2>
-            <div style="line-height: 1.8; color: #333;">
-                <p><strong>📊 学校总数:</strong> ${stats.total_schools}</p>
-                <p><strong>📤 总上传次数:</strong> ${stats.total_uploads}</p>
-        `;
-        
-        if (stats.popular_schools && stats.popular_schools.length > 0) {
-            statsHtml += `
-                <h3 style="margin-top: 15px; color: #2c3e50;">🏆 热门学校 Top 10</h3>
-                <ol style="padding-left: 20px;">
-            `;
-            
-            stats.popular_schools.forEach((school, index) => {
-                statsHtml += `
-                    <li style="margin: 8px 0;">
-                        <strong>${school.school_name}</strong>
-                        <span style="color: #7f8c8d; font-size: 0.9em;">
-                            (点赞: ${school.likes}, 下载: ${school.download_count})
-                        </span>
-                    </li>
-                `;
-            });
-            
-            statsHtml += `</ol>`;
+
+        const response = await fetch('/api/data/import', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ schools: schoolsData })
+        });
+
+        const result = await response.json();
+        if (result.success) {
+            showNotification(result.message, 'success');
+            // 重新加载当前菜单
+            await loadMenu();
+        } else {
+            showNotification('导入失败: ' + result.message, 'error');
         }
-        
-        statsHtml += `</div>`;
-        
-        // 显示弹窗
-        showModal(statsHtml);
-        showCloudStatus('统计信息已加载', 'success');
-        
     } catch (error) {
-        console.error('获取统计失败:', error);
-        showCloudStatus(`❌ 获取统计失败: ${error.message}`, 'error');
-        showNotification('获取云端统计失败', 'error');
+        console.error('导入失败:', error);
+        showNotification('导入失败，请检查文件格式', 'error');
     }
+
+    // 重置文件输入，以便可以再次导入同一文件
+    event.target.value = '';
 }
 
 // ========== 菜品自动获取功能 ==========

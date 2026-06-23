@@ -1,4 +1,4 @@
-# v4 - update 宁德师范学院 & 福建医科大学 dish data (2025 verified)
+# v5 - cache body data in localStorage, add 5 new conditions to frontend
 services:
   - type: web
     name: cafeteria-recommender

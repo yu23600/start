@@ -10,13 +10,25 @@ document.addEventListener('DOMContentLoaded', function() {
     loadUniversitiesList(); // 加载大学列表
     checkFirstTimeUse(); // 检查是否首次使用
     setupEventListeners();
+    loadBodyData(); // 恢复缓存的身体数据
     startNutritionTips();
 });
 
 function setupEventListeners() {
-    // BMI自动计算
-    document.getElementById('heightInput').addEventListener('input', autoCalculateBMI);
-    document.getElementById('weightInput').addEventListener('input', autoCalculateBMI);
+    // BMI自动计算 + 自动保存
+    document.getElementById('heightInput').addEventListener('input', function() { autoCalculateBMI(); saveBodyData(); });
+    document.getElementById('weightInput').addEventListener('input', function() { autoCalculateBMI(); saveBodyData(); });
+    document.getElementById('ageInput').addEventListener('change', saveBodyData);
+
+    // 性别切换时保存
+    document.querySelectorAll('input[name="gender"]').forEach(function(radio) {
+        radio.addEventListener('change', saveBodyData);
+    });
+
+    // 状态复选框变化时保存
+    document.querySelectorAll('.checkbox-grid input[type="checkbox"]').forEach(function(cb) {
+        cb.addEventListener('change', saveBodyData);
+    });
 
     // 回车键事件
     document.addEventListener('keypress', function(e) {
@@ -304,7 +316,12 @@ async function smartRecommend() {
         'cond_exercise': '运动后',
         'cond_underweight': '低体重',
         'cond_overweight': '超重',
-        'cond_vegetarian': '素食'
+        'cond_vegetarian': '素食',
+        'cond_fire': '上火',
+        'cond_muscle': '增肌',
+        'cond_seafood_allergy': '海鲜过敏',
+        'cond_peanut_allergy': '花生过敏',
+        'cond_lactose': '乳糖不耐'
     };
     
     for (const [id, name] of Object.entries(conditionMap)) {
@@ -431,6 +448,47 @@ function autoCalculateBMI() {
             const bmi = weight / ((height / 100) ** 2);
             document.getElementById('bmiResult').textContent = `BMI: ${bmi.toFixed(1)}`;
         }
+    }
+}
+
+// ========== 身体数据缓存 ==========
+function saveBodyData() {
+    const bodyData = {
+        age: document.getElementById('ageInput').value,
+        gender: document.querySelector('input[name="gender"]:checked')?.value || '女',
+        height: document.getElementById('heightInput').value,
+        weight: document.getElementById('weightInput').value,
+        conditions: {}
+    };
+    // 保存所有复选框状态
+    document.querySelectorAll('.checkbox-grid input[type="checkbox"]').forEach(function(cb) {
+        bodyData.conditions[cb.id] = cb.checked;
+    });
+    localStorage.setItem('body_data', JSON.stringify(bodyData));
+}
+
+function loadBodyData() {
+    const saved = localStorage.getItem('body_data');
+    if (!saved) return;
+    try {
+        const data = JSON.parse(saved);
+        if (data.age) document.getElementById('ageInput').value = data.age;
+        if (data.gender) {
+            const radio = document.querySelector(`input[name="gender"][value="${data.gender}"]`);
+            if (radio) radio.checked = true;
+        }
+        if (data.height) document.getElementById('heightInput').value = data.height;
+        if (data.weight) document.getElementById('weightInput').value = data.weight;
+        if (data.conditions) {
+            for (const [id, checked] of Object.entries(data.conditions)) {
+                const el = document.getElementById(id);
+                if (el) el.checked = checked;
+            }
+        }
+        // 恢复后自动计算BMI
+        autoCalculateBMI();
+    } catch (e) {
+        console.error('加载缓存身体数据失败:', e);
     }
 }
 

@@ -1716,6 +1716,39 @@ def get_meal_log_users():
     })
 
 
+@app.route('/api/status', methods=['GET'])
+def system_status():
+    """系统状态诊断"""
+    status = {
+        "supabase_connected": supabase_client is not None,
+        "supabase_url": SUPABASE_URL[:30] + "..." if SUPABASE_URL else "(未设置)",
+        "storage_backend": "supabase" if supabase_client else "local_json (临时!)",
+    }
+    # 检查本地数据文件
+    import os
+    for name, path in [("cafeteria_data", DATA_FILE), ("meal_logs", MEAL_LOGS_FILE),
+                        ("meal_users", MEAL_USERS_FILE), ("dish_tags", USER_TAGS_FILE)]:
+        status[f"{name}_exists"] = os.path.exists(path) if path else False
+    # 如果 Supabase 可用，查询数据量
+    if supabase_client:
+        try:
+            r1 = supabase_client.table('school_menus').select('school_name', count='exact').execute()
+            status["supabase_schools"] = r1.count
+        except:
+            status["supabase_schools"] = -1
+        try:
+            r2 = supabase_client.table('meal_users').select('username', count='exact').execute()
+            status["supabase_users"] = r2.count
+        except:
+            status["supabase_users"] = -1
+        try:
+            r3 = supabase_client.table('meal_logs').select('username', count='exact').execute()
+            status["supabase_log_rows"] = r3.count
+        except:
+            status["supabase_log_rows"] = -1
+    return jsonify(status)
+
+
 # ========== 错误处理 ==========
 @app.errorhandler(404)
 def not_found(error):

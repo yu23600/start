@@ -9,6 +9,278 @@ let todayMeals = { breakfast: [], lunch: [], dinner: [] };
 let currentMealTab = 'breakfast';
 let schoolMenuItems = [];
 let excludedDishes = []; // 已推荐过的菜品，避免重复
+let currentUserRole = 'user'; // 当前用户角色：admin / user
+let selectedCampus = ''; // 选中的校区
+
+// ========== 校区数据 ==========
+const CAMPUS_DATA = {
+    "北京大学": ["燕园校区", "医学部校区", "圆明园校区"],
+    "清华大学": ["主校区", "深圳国际研究生院"],
+    "复旦大学": ["邯郸校区", "枫林校区", "江湾校区", "张江校区"],
+    "上海交通大学": ["闵行校区", "徐汇校区", "卢湾校区", "浦东校区", "七宝校区"],
+    "浙江大学": ["紫金港校区", "玉泉校区", "西溪校区", "华家池校区", "之江校区", "舟山校区", "海宁校区"],
+    "南京大学": ["仙林校区", "鼓楼校区", "浦口校区"],
+    "武汉大学": ["文理学部", "工学部", "信息学部", "医学部"],
+    "华中科技大学": ["主校区", "同济医学院"],
+    "中山大学": ["广州南校园", "广州北校园", "广州东校园", "珠海校区", "深圳校区"],
+    "四川大学": ["望江校区", "华西校区", "江安校区"],
+    "山东大学": ["中心校区", "洪家楼校区", "突泉校区", "千佛山校区", "兴隆山校区", "软件园校区", "威海校区", "青岛校区"],
+    "吉林大学": ["前卫南区", "前卫北区", "南岭校区", "新民校区", "朝阳校区", "和平校区"],
+    "厦门大学": ["思明校区", "翔安校区", "马来西亚分校"],
+    "同济大学": ["四平路校区", "嘉定校区", "沪西校区", "沪北校区"],
+    "东南大学": ["四牌楼校区", "九龙湖校区", "丁家桥校区"],
+    "南开大学": ["八里台校区", "津南校区", "泰达校区"],
+    "天津大学": ["卫津路校区", "北洋园校区", "滨海工业研究院"],
+    "哈尔滨工业大学": ["哈尔滨校区", "威海校区", "深圳校区"],
+    "西安交通大学": ["兴庆校区", "雁塔校区", "曲江校区", "创新港校区"],
+    "西北工业大学": ["友谊校区", "长安校区", "太仓校区"],
+    "电子科技大学": ["清水河校区", "沙河校区"],
+    "重庆大学": ["A校区", "B校区", "C校区", "虎溪校区"],
+    "湖南大学": ["南校区", "北校区", "财院校区"],
+    "中南大学": ["校本部", "铁道校区", "湘雅校区"],
+    "华南理工大学": ["五山校区", "大学城校区", "广州国际校区"],
+    "大连理工大学": ["凌水主校区", "开发区校区", "盘锦校区"],
+    "东北大学": ["南湖校区", "浑南校区", "沈河校区", "秦皇岛分校"],
+    "中国农业大学": ["东校区", "西校区"],
+    "北京师范大学": ["海淀校区", "珠海校区"],
+    "北京理工大学": ["中关村校区", "良乡校区", "珠海校区"],
+    "南京航空航天大学": ["明故宫校区", "将军路校区", "天目湖校区"],
+    "南京理工大学": ["南京校区", "江阴校区"],
+    "华东师范大学": ["普陀校区", "闵行校区"],
+    "中国海洋大学": ["崂山校区", "鱼山校区", "浮山校区", "西海岸校区"],
+    "兰州大学": ["城关校区", "榆中校区"],
+    "云南大学": ["呈贡校区", "东陆校区"],
+    "郑州大学": ["主校区", "南校区", "北校区", "东校区"],
+    "福州大学": ["旗山校区", "怡山校区", "铜盘校区", "泉港校区"],
+    "合肥工业大学": ["屯溪路校区", "翡翠湖校区", "宣城校区"],
+    "武汉理工大学": ["马房山校区", "余家头校区", "南湖校区"],
+    "西南交通大学": ["犀浦校区", "九里校区", "峨眉校区"],
+    "长安大学": ["渭水校区", "小寨校区", "大雁塔校区"],
+    "华东理工大学": ["徐汇校区", "奉贤校区"],
+    "北京交通大学": ["主校区", "威海校区"],
+    "南京师范大学": ["仙林校区", "随园校区", "紫金校区"],
+    "苏州大学": ["天赐庄校区", "独墅湖校区", "阳澄湖校区"],
+    "上海大学": ["宝山校区", "延长校区", "嘉定校区"],
+    "暨南大学": ["石牌校区", "番禺校区", "珠海校区", "深圳校区"],
+    "西南大学": ["主校区", "荣昌校区"],
+    "安徽大学": ["磬苑校区", "龙河校区", "史河路校区", "东校区"],
+    "南昌大学": ["前湖校区", "鄱阳湖校区", "东湖校区", "抚州校区"],
+    "广西大学": ["主校区", "东校园", "西校园"],
+    "贵州大学": ["花溪校区", "蔡家关校区", "小河校区"],
+    "海南大学": ["海甸校区", "儋州校区", "城西校区", "观澜湖校区"],
+    "宁夏大学": ["贺兰山校区", "怀远校区", "文萃校区"],
+    "新疆大学": ["博达校区", "友好校区", "红湖校区"],
+    "内蒙古大学": ["南校区", "北校区"],
+    "西藏大学": ["纳金校区", "罗布林卡校区"],
+    "青海大学": ["主校区"],
+    "石河子大学": ["主校区"],
+    "延边大学": ["主校区"],
+    "中央民族大学": ["海淀校区", "丰台校区"],
+    "中国传媒大学": ["主校区"],
+    "北京邮电大学": ["西土城校区", "沙河校区", "宏福校区"],
+    "华北电力大学": ["北京校区", "保定校区"],
+    "中国石油大学": ["北京校区", "华东校区"],
+    "中国地质大学": ["武汉校区", "北京校区"],
+    "华中农业大学": ["主校区"],
+    "华中师范大学": ["主校区"],
+    "东北师范大学": ["自由校区", "净月校区"],
+    "陕西师范大学": ["长安校区", "雁塔校区"],
+    "西南财经大学": ["光华校区", "柳林校区"],
+    "西南政法大学": ["渝北校区", "沙坪坝校区", "宝圣湖校区"],
+    "西北大学": ["太白校区", "长安校区"],
+    "湘潭大学": ["主校区", "兴湘校区"],
+    "扬州大学": ["瘦西湖校区", "扬子津校区", "江阳路校区", "文汇路校区", "广陵校区"],
+    "江苏大学": ["主校区"],
+    "浙江工业大学": ["朝晖校区", "屏峰校区", "莫干山校区"],
+    "浙江师范大学": ["金华校区", "杭州校区"],
+    "杭州电子科技大学": ["下沙校区", "文一校区"],
+    "宁波大学": ["主校区", "梅山校区"],
+    "温州大学": ["茶山校区", "学院路校区"],
+    "广东工业大学": ["大学城校区", "东风路校区", "龙洞校区", "番禺校区", "揭阳校区"],
+    "深圳大学": ["粤海校区", "丽湖校区"],
+    "广州大学": ["大学城校区", "桂花岗校区"],
+    "东莞理工学院": ["松山湖校区", "莞城校区"],
+    "佛山科学技术学院": ["江湾校区", "仙溪校区"],
+    "福建师范大学": ["旗山校区", "仓山校区"],
+    "集美大学": ["主校区"],
+    "华侨大学": ["泉州校区", "厦门校区"],
+    "江西财经大学": ["蛟桥园校区", "麦庐园校区", "枫林园校区"],
+    "华东交通大学": ["主校区"],
+    "河南大学": ["明伦校区", "金明校区", "郑州校区"],
+    "河南师范大学": ["东校区", "西校区"],
+    "湖北大学": ["主校区"],
+    "三峡大学": ["主校区"],
+    "长江大学": ["荆州校区", "武汉校区"],
+    "湖南师范大学": ["主校区"],
+    "长沙理工大学": ["云塘校区", "金盆岭校区"],
+    "南华大学": ["红湘校区", "船山校区"],
+    "成都理工大学": ["主校区"],
+    "四川师范大学": ["狮子山校区", "成龙校区"],
+    "西华大学": ["郫都校区", "彭州校区"],
+    "昆明理工大学": ["呈贡校区", "莲华校区", "新迎校区"],
+    "云南师范大学": ["呈贡校区", "一二·一西南联大校区"],
+    "西北师范大学": ["主校区"],
+    "兰州交通大学": ["主校区"],
+    "桂林电子科技大学": ["花江校区", "金鸡岭校区", "六合路校区"],
+    "桂林理工大学": ["屏风校区", "雁山校区"],
+    "海南师范大学": ["龙昆南校区", "桂林洋校区"],
+    "贵州师范大学": ["宝山校区", "花溪校区"],
+    "山西大学": ["坞城校区", "东山校区"],
+    "太原理工大学": ["迎西校区", "虎峪校区", "明向校区"],
+    "中北大学": ["主校区"],
+    "河北工业大学": ["天津校区", "廊坊校区"],
+    "燕山大学": ["主校区"],
+    "河北大学": ["七一路校区", "五四路校区", "裕华路校区"],
+    "辽宁大学": ["崇山校区", "蒲河校区"],
+    "大连海事大学": ["主校区"],
+    "沈阳工业大学": ["兴顺校区", "中央大街校区"],
+    "吉林大学": ["前卫南区", "前卫北区", "南岭校区", "新民校区", "朝阳校区", "和平校区"],
+    "黑龙江大学": ["主校区"],
+    "哈尔滨理工大学": ["南区", "西区", "东区"],
+    "安徽师范大学": ["山校区", "花津校区"],
+    "安徽工业大学": ["佳山校区", "秀山校区"],
+    "山东师范大学": ["千佛山校区", "长清湖校区"],
+    "青岛大学": ["浮山校区", "金家岭校区", "松山校区"],
+    "济南大学": ["主校区"],
+    "曲阜师范大学": ["曲阜校区", "日照校区"],
+    "鲁东大学": ["主校区"],
+    "聊城大学": ["主校区"],
+    "信阳师范大学": ["主校区"],
+    "黄冈师范学院": ["主校区"],
+    "宁德师范学院": ["东湖校区", "新校区"],
+    "莆田学院": ["紫霄校区", "学园校区"],
+    "武夷学院": ["主校区"],
+    "龙岩学院": ["主校区"],
+    "三明学院": ["主校区"],
+    "泉州师范学院": ["主校区"],
+    "闽南师范大学": ["主校区"],
+    "上饶师范学院": ["主校区"],
+    "井冈山大学": ["主校区"],
+    "宜春学院": ["主校区"],
+    "赣南师范大学": ["黄金校区", "章贡校区"],
+    "景德镇陶瓷大学": ["湘湖校区", "新厂校区"],
+    "东华理工大学": ["南昌校区", "抚州校区"],
+    "江西理工大学": ["黄金校区", "红旗校区", "南昌校区"],
+    "西安电子科技大学": ["南校区", "北校区"],
+    "西安建筑科技大学": ["草堂校区", "雁塔校区"],
+    "西安理工大学": ["曲江校区", "金花校区"],
+    "西安科技大学": ["雁塔校区", "临潼校区"],
+    "西安工业大学": ["未央校区", "金花校区"],
+    "西安邮电大学": ["长安校区", "雁塔校区"],
+    "陕西科技大学": ["未央校区", "太华路校区"],
+    "延安大学": ["新城校区", "老校区"],
+    "宝鸡文理学院": ["高新校区", "石鼓校区"],
+    "渭南师范学院": ["朝阳校区"],
+    "榆林学院": ["主校区"],
+    "安康学院": ["江南校区", "江北校区"],
+    "商洛学院": ["主校区"],
+    "咸阳师范学院": ["主校区"],
+    "甘肃政法大学": ["主校区"],
+    "兰州财经大学": ["和平校区", "段家滩校区"],
+    "天水师范学院": ["主校区"],
+    "河西学院": ["主校区"],
+    "陇东学院": ["主校区"],
+    "昌吉学院": ["主校区"],
+    "伊犁师范大学": ["主校区"],
+    "喀什大学": ["主校区"],
+    "塔里木大学": ["主校区"],
+    "新疆师范大学": ["温泉校区", "昆仑校区"],
+    "新疆农业大学": ["主校区"],
+    "新疆财经大学": ["主校区"],
+    "内蒙古师范大学": ["赛罕校区", "盛乐校区"],
+    "内蒙古工业大学": ["新城校区", "金川校区"],
+    "内蒙古科技大学": ["主校区"],
+    "内蒙古民族大学": ["主校区"],
+    "内蒙古财经大学": ["主校区"],
+    "赤峰学院": ["主校区"],
+    "呼伦贝尔学院": ["主校区"],
+    "集宁师范学院": ["主校区"],
+    "鄂尔多斯应用技术学院": ["主校区"],
+    "河套学院": ["主校区"],
+    "阿拉善职业技术学院": ["主校区"],
+    "锡林郭勒职业学院": ["主校区"],
+    "乌兰察布职业学院": ["主校区"],
+    "包头职业技术学院": ["主校区"],
+    "呼和浩特职业学院": ["主校区"],
+    "内蒙古建筑职业技术学院": ["主校区"],
+    "内蒙古机电职业技术学院": ["主校区"],
+    "内蒙古化工职业学院": ["主校区"],
+    "内蒙古商贸职业学院": ["主校区"],
+    "内蒙古警察职业学院": ["主校区"],
+    "内蒙古体育职业学院": ["主校区"],
+    "内蒙古艺术学校": ["主校区"],
+    "通辽职业学院": ["主校区"],
+    "兴安职业技术学院": ["主校区"],
+    "乌海职业技术学院": ["主校区"],
+    "巴彦尔职业技术学院": ["主校区"],
+    "锡林郭勒盟职业学院": ["主校区"],
+    "乌兰察布医学高等专科学校": ["主校区"],
+    "内蒙古民族幼儿师范高等专科学校": ["主校区"],
+    "鄂尔多斯职业学院": ["主校区"],
+    "内蒙古能源职业学院": ["主校区"],
+    "内蒙古丰州职业学院": ["主校区"],
+    "内蒙古北方职业技术学院": ["主校区"],
+    "内蒙古经贸外语职业学院": ["主校区"],
+    "内蒙古科技职业学院": ["主校区"],
+    "内蒙古大学创业学院": ["主校区"],
+    "内蒙古师范大学鸿德学院": ["主校区"],
+    "内蒙古工业大学矿业学院": ["主校区"],
+    "内蒙古科技大学包头师范学院": ["主校区"],
+    "内蒙古科技大学包头医学院": ["主校区"],
+    "河套学院": ["主校区"],
+    "集宁师范学院": ["主校区"],
+    "鄂尔多斯应用技术学院": ["主校区"],
+    "阿拉善职业技术学院": ["主校区"],
+    "锡林郭勒职业学院": ["主校区"],
+    "乌兰察布职业学院": ["主校区"],
+    "包头职业技术学院": ["主校区"],
+    "呼和浩特职业学院": ["主校区"],
+    "内蒙古建筑职业技术学院": ["主校区"],
+    "内蒙古机电职业技术学院": ["主校区"],
+    "内蒙古化工职业学院": ["主校区"],
+    "内蒙古商贸职业学院": ["主校区"],
+    "内蒙古警察职业学院": ["主校区"],
+    "内蒙古体育职业学院": ["主校区"],
+    "内蒙古艺术学校": ["主校区"],
+    "通辽职业学院": ["主校区"],
+    "兴安职业技术学院": ["主校区"],
+    "乌海职业技术学院": ["主校区"],
+    "巴彦淖尔职业技术学院": ["主校区"],
+    "锡林郭勒盟职业学院": ["主校区"],
+    "乌兰察布医学高等专科学校": ["主校区"],
+    "内蒙古民族幼儿师范高等专科学校": ["主校区"],
+    "鄂尔多斯职业学院": ["主校区"],
+    "内蒙古能源职业学院": ["主校区"],
+    "内蒙古丰州职业学院": ["主校区"],
+    "内蒙古北方职业技术学院": ["主校区"],
+    "内蒙古经贸外语职业学院": ["主校区"],
+    "内蒙古科技职业学院": ["主校区"],
+    "西藏民族大学": ["咸阳校区", "拉萨校区"],
+    "青海师范大学": ["主校区"],
+    "青海民族大学": ["东序校区", "西序校区"],
+    "宁夏医科大学": ["雁湖校区", "双怡校区"],
+    "北方民族大学": ["主校区"],
+    "宁夏理工学院": ["主校区"],
+    "宁夏师范学院": ["主校区"],
+    "宁夏职业技术学院": ["主校区"],
+    "宁夏工商职业技术学院": ["主校区"],
+    "宁夏财经职业技术学院": ["主校区"],
+    "宁夏司法警官职业学院": ["主校区"],
+    "宁夏建设职业技术学院": ["主校区"],
+    "宁夏工业职业学院": ["主校区"],
+    "宁夏葡萄酒与防沙治沙职业技术学院": ["主校区"],
+    "宁夏幼儿师范高等专科学校": ["主校区"],
+    "固原师范高等专科学校": ["主校区"],
+    "吴忠职业技术学院": ["主校区"],
+    "中卫职业技术学院": ["主校区"],
+    "石嘴山工贸职业技术学院": ["主校区"],
+    "宁夏艺术职业学院": ["主校区"],
+    "宁夏体育职业学院": ["主校区"],
+    "万州学院": ["主校区"],
+    "七台河煤矿学院": ["主校区"],
+    "三亚学院": ["主校区"],
+    "东方职业技术学院": ["主校区"],
+};
 
 // ========== 初始化 ==========
 document.addEventListener('DOMContentLoaded', function() {
@@ -17,6 +289,7 @@ document.addEventListener('DOMContentLoaded', function() {
     loadAllergies(); // 恢复过敏设置
     loadUserGoal(); // 加载用户目标
     updateTodayCheckinBar(); // 更新顶部打卡状态
+    updateAdminButton(); // 更新管理员按钮显示
 });
 
 function setupEventListeners() {
@@ -711,6 +984,10 @@ function showSchoolWizard() {
     const modal = document.getElementById('schoolWizardModal');
     modal.classList.add('show');
     
+    // 清理旧的校区选择器
+    const campusContainer = document.getElementById('campusSelectorContainer');
+    if (campusContainer) campusContainer.remove();
+    
     // 渲染学校列表
     renderSchoolList(universitiesList);
     
@@ -718,6 +995,7 @@ function showSchoolWizard() {
     document.getElementById('schoolSearchInput').value = '';
     document.getElementById('customSchoolInput').value = '';
     selectedSchool = null;
+    selectedCampus = '';
 }
 
 /**
@@ -749,6 +1027,7 @@ function renderSchoolList(schools) {
  */
 function selectSchool(schoolName) {
     selectedSchool = schoolName;
+    selectedCampus = ''; // 重置校区选择
     
     // 更新UI显示选中状态
     const items = document.querySelectorAll('.school-item');
@@ -761,6 +1040,73 @@ function selectSchool(schoolName) {
     
     // 清空自定义输入
     document.getElementById('customSchoolInput').value = '';
+    
+    // 显示校区选择器
+    showCampusSelector(schoolName);
+}
+
+/**
+ * 显示校区选择器
+ */
+function showCampusSelector(schoolName) {
+    let campusContainer = document.getElementById('campusSelectorContainer');
+    
+    // 移除旧的校区选择器
+    if (campusContainer) {
+        campusContainer.remove();
+    }
+    
+    const campuses = CAMPUS_DATA[schoolName];
+    if (!campuses || campuses.length <= 1) {
+        // 没有多校区或只有一个校区，不需要选择
+        selectedCampus = '';
+        return;
+    }
+    
+    // 创建校区选择器
+    campusContainer = document.createElement('div');
+    campusContainer.id = 'campusSelectorContainer';
+    campusContainer.style.cssText = 'margin-top:15px;padding-top:15px;border-top:2px solid #e9ecef;';
+    
+    let html = '<p style="font-weight:600;color:#495057;margin-bottom:8px;">🏛️ 选择校区：</p>';
+    html += '<div style="display:flex;flex-wrap:wrap;gap:8px;">';
+    
+    // 添加"不指定"选项
+    html += `<div class="campus-chip" data-campus="" onclick="selectCampus('')" style="padding:8px 16px;border:2px solid #ddd;border-radius:20px;background:#fff;cursor:pointer;font-size:0.9em;transition:all 0.2s;">不指定</div>`;
+    
+    for (const campus of campuses) {
+        html += `<div class="campus-chip" data-campus="${campus}" onclick="selectCampus('${campus}')" style="padding:8px 16px;border:2px solid #ddd;border-radius:20px;background:#fff;cursor:pointer;font-size:0.9em;transition:all 0.2s;">${campus}</div>`;
+    }
+    
+    html += '</div>';
+    campusContainer.innerHTML = html;
+    
+    // 插入到自定义输入框之前
+    const customOption = document.querySelector('.custom-school-option');
+    if (customOption) {
+        customOption.parentNode.insertBefore(campusContainer, customOption);
+    }
+}
+
+/**
+ * 选择校区
+ */
+function selectCampus(campus) {
+    selectedCampus = campus;
+    
+    // 更新UI
+    document.querySelectorAll('.campus-chip').forEach(chip => {
+        chip.style.borderColor = '#ddd';
+        chip.style.background = '#fff';
+        chip.style.color = '#333';
+    });
+    
+    const selected = document.querySelector(`.campus-chip[data-campus="${campus}"]`);
+    if (selected) {
+        selected.style.borderColor = '#667eea';
+        selected.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
+        selected.style.color = 'white';
+    }
 }
 
 /**
@@ -787,11 +1133,16 @@ function filterSchools() {
 async function confirmSchoolSelection() {
     // 优先使用自定义输入
     const customInput = document.getElementById('customSchoolInput').value.trim();
-    const finalSchool = customInput || selectedSchool;
+    let finalSchool = customInput || selectedSchool;
     
     if (!finalSchool) {
         showNotification('请选择或输入一个学校！', 'warning');
         return;
+    }
+    
+    // 如果有校区选择，将校区附加到学校名称
+    if (selectedCampus && !customInput) {
+        finalSchool = `${finalSchool}-${selectedCampus}`;
     }
     
     try {
@@ -840,6 +1191,11 @@ async function confirmSchoolSelection() {
 function closeSchoolWizard() {
     const modal = document.getElementById('schoolWizardModal');
     modal.classList.remove('show');
+    
+    // 清理校区选择器
+    const campusContainer = document.getElementById('campusSelectorContainer');
+    if (campusContainer) campusContainer.remove();
+    selectedCampus = '';
 }
 
 /**
@@ -947,10 +1303,30 @@ function showDishFetcher() {
     const skipBtn = document.getElementById('skipTaggingBtn');
     if (skipBtn) skipBtn.remove();
 
-    document.getElementById('fetcherSubtitle').textContent = `加载「${currentSchool}」的云端菜单`;
-
     const sourceInfo = document.getElementById('fetcherSourceInfo');
-    sourceInfo.innerHTML = '<p style="color:#666;">点击"开始获取"将加载云端已保存的菜单数据。</p><p style="color:#999;font-size:0.85em;margin-top:5px;">你可以逐条审核、增删菜品，修改后保存会同步到云端。</p>';
+
+    // 先加载当前学校的已保存菜单
+    fetch(`/api/menu/${encodeURIComponent(currentSchool)}`)
+        .then(r => r.json())
+        .then(data => {
+            if (data.success && data.items && data.items.length > 0) {
+                // 有已保存菜单，显示当前菜单内容
+                sourceInfo.innerHTML = `
+                    <p style="color:#333;font-weight:600;margin-bottom:8px;">📋 「${currentSchool}」当前菜单（${data.count} 道菜品）</p>
+                    <div style="max-height:150px;overflow-y:auto;background:#f8f9fa;border-radius:8px;padding:10px;margin-bottom:10px;font-size:0.9em;color:#555;">
+                        ${data.items.map(d => `<span style="display:inline-block;background:white;border:1px solid #e0e0e0;border-radius:4px;padding:2px 8px;margin:2px;font-size:0.9em;">${d}</span>`).join('')}
+                    </div>
+                    <p style="color:#666;">点击"开始获取"将从云端加载最新菜单数据，你可以逐条审核、增删菜品。</p>
+                    <p style="color:#999;font-size:0.85em;margin-top:5px;">如果云端没有数据，将尝试从精选数据库获取参考菜品。</p>
+                `;
+            } else {
+                // 没有已保存菜单
+                sourceInfo.innerHTML = '<p style="color:#666;">当前学校暂无菜单数据。点击"开始获取"将从云端或精选数据库加载菜品。</p><p style="color:#999;font-size:0.85em;margin-top:5px;">你可以逐条审核、增删菜品，修改后保存。</p>';
+            }
+        })
+        .catch(() => {
+            sourceInfo.innerHTML = '<p style="color:#666;">点击"开始获取"将加载菜品数据。</p>';
+        });
 }
 
 function closeDishFetcher() {
@@ -977,6 +1353,26 @@ async function startFetchDishes() {
     document.getElementById('fetcherActionBtn').disabled = true;
 
     try {
+        // 先尝试获取当前学校的已保存菜单
+        const menuResp = await fetch(`/api/menu/${encodeURIComponent(currentSchool)}`);
+        const menuData = await menuResp.json();
+
+        if (menuData.success && menuData.items && menuData.items.length > 0) {
+            // 有已保存菜单，直接使用
+            loading.style.display = 'none';
+            document.getElementById('fetcherActionBtn').disabled = false;
+            fetchedDishes = menuData.items;
+            fetchResultInfo = {
+                confidence: 'high',
+                source_desc: '已保存的菜单数据',
+                note: '这是你之前保存的菜单，可以逐条审核、增删后重新保存。',
+                dish_count: menuData.items.length
+            };
+            showDishReviewStep();
+            return;
+        }
+
+        // 没有已保存菜单，尝试从精选数据库获取
         const response = await fetch('/api/dishes/fetch', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1054,7 +1450,8 @@ function showDishReviewStep() {
     if (!skipBtn) {
         skipBtn = document.createElement('button');
         skipBtn.id = 'skipTaggingBtn';
-        skipBtn.className = 'btn btn-secondary btn-large';
+        skipBtn.className = 'btn btn-secondary';
+        skipBtn.style.cssText = 'flex:1;min-width:80px;';
         footer.insertBefore(skipBtn, footer.querySelector('#fetcherActionBtn').nextSibling);
     }
     skipBtn.textContent = '跳过标注';
@@ -1378,6 +1775,10 @@ function getMealUser() {
 
 function setMealUser(name) {
     localStorage.setItem('meal_user', name.trim());
+    // 检查是否为管理员
+    const adminUsernames = ['nick3448450113']; // 预设管理员列表
+    currentUserRole = adminUsernames.includes(name.trim()) ? 'admin' : 'user';
+    updateAdminButton();
 }
 
 function clearMealAuth() {
@@ -2283,4 +2684,351 @@ function renderGallery(schools) {
     }
 
     grid.innerHTML = html;
+}
+
+
+// ========== 管理员功能 ==========
+function isAdmin() {
+    return currentUserRole === 'admin';
+}
+
+function updateAdminButton() {
+    const adminBtn = document.getElementById('adminBtn');
+    if (adminBtn) {
+        adminBtn.style.display = isAdmin() ? 'inline-block' : 'none';
+    }
+}
+
+function showAdminPanel() {
+    if (!isAdmin()) {
+        showNotification('需要管理员权限', 'warning');
+        return;
+    }
+    
+    const modal = document.getElementById('adminModal');
+    modal.classList.add('show');
+    
+    const user = getMealUser();
+    document.getElementById('adminUsernameDisplay').textContent = user ? user.username : '';
+    
+    // 加载第一个标签页内容
+    switchAdminTab('menu');
+}
+
+function closeAdminPanel() {
+    document.getElementById('adminModal').classList.remove('show');
+}
+
+function switchAdminTab(tabName) {
+    // 更新标签按钮状态
+    document.querySelectorAll('.admin-tab').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    event.target.classList.add('active');
+    
+    // 更新标签内容显示
+    document.querySelectorAll('.admin-tab-content').forEach(content => {
+        content.classList.remove('active');
+    });
+    document.getElementById('adminTab' + tabName.charAt(0).toUpperCase() + tabName.slice(1)).classList.add('active');
+    
+    // 加载对应标签页内容
+    if (tabName === 'menu') {
+        loadAdminMenus();
+    } else if (tabName === 'users') {
+        loadAdminUsers();
+    } else if (tabName === 'admins') {
+        loadAdminAdmins();
+    } else if (tabName === 'stats') {
+        loadAdminStats();
+    }
+}
+
+async function loadAdminMenus() {
+    const container = document.getElementById('adminMenuList');
+    container.innerHTML = '<div style="text-align:center; padding:20px; color:#999;">加载中...</div>';
+    
+    try {
+        const resp = await fetch('/api/schools');
+        const data = await resp.json();
+        
+        if (data.success && data.schools.length > 0) {
+            let html = '';
+            for (const school of data.schools) {
+                html += `
+                    <div class="admin-school-item">
+                        <div class="admin-school-name">${school}</div>
+                        <div class="admin-school-actions">
+                            <button onclick="adminResetMenu('${school}')" class="btn btn-small btn-warning" title="重置为精选菜单">🔄 重置</button>
+                            <button onclick="adminClearMenu('${school}')" class="btn btn-small btn-danger" title="清空菜单">️ 清空</button>
+                            <button onclick="adminEditMenu('${school}')" class="btn btn-small btn-primary" title="编辑菜单">️ 编辑</button>
+                        </div>
+                    </div>
+                `;
+            }
+            container.innerHTML = html;
+        } else {
+            container.innerHTML = '<div style="text-align:center; padding:20px; color:#999;">暂无学校数据</div>';
+        }
+    } catch (e) {
+        container.innerHTML = '<div style="text-align:center; padding:20px; color:#e74c3c;">加载失败</div>';
+    }
+}
+
+async function adminResetMenu(schoolName) {
+    if (!confirm(`确定要将「${schoolName}」的菜单重置为精选版本吗？`)) return;
+    
+    const user = getMealUser();
+    if (!user) return;
+    
+    try {
+        const resp = await fetch('/api/admin/menu/reset', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: user.username, school_name: schoolName })
+        });
+        const data = await resp.json();
+        
+        if (data.success) {
+            showNotification(data.message, 'success');
+            loadAdminMenus();
+        } else {
+            showNotification(data.message, 'error');
+        }
+    } catch (e) {
+        showNotification('操作失败', 'error');
+    }
+}
+
+async function adminClearMenu(schoolName) {
+    if (!confirm(`确定要清空「${schoolName}」的菜单吗？此操作不可恢复！`)) return;
+    
+    const user = getMealUser();
+    if (!user) return;
+    
+    try {
+        const resp = await fetch('/api/admin/menu/clear', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: user.username, school_name: schoolName })
+        });
+        const data = await resp.json();
+        
+        if (data.success) {
+            showNotification(data.message, 'success');
+            loadAdminMenus();
+        } else {
+            showNotification(data.message, 'error');
+        }
+    } catch (e) {
+        showNotification('操作失败', 'error');
+    }
+}
+
+function adminEditMenu(schoolName) {
+    // 复用现有的菜单编辑器
+    currentSchool = schoolName;
+    showMenuEditor();
+}
+
+async function loadAdminUsers() {
+    const container = document.getElementById('adminUserList');
+    container.innerHTML = '<div style="text-align:center; padding:20px; color:#999;">加载中...</div>';
+    
+    const user = getMealUser();
+    if (!user) return;
+    
+    try {
+        const resp = await fetch(`/api/admin/users?username=${encodeURIComponent(user.username)}`);
+        const data = await resp.json();
+        
+        if (data.success && data.users.length > 0) {
+            let html = '';
+            for (const u of data.users) {
+                const roleBadge = u.role === 'admin' ? '<span class="role-badge admin">管理员</span>' : '';
+                html += `
+                    <div class="admin-user-item">
+                        <div class="admin-user-info">
+                            <div class="admin-user-name">${u.username} ${roleBadge}</div>
+                            <div class="admin-user-meta">注册：${u.created_at ? u.created_at.split('T')[0] : '未知'} | 打卡：${u.meal_count} 次</div>
+                        </div>
+                        <div class="admin-user-actions">
+                            ${u.username !== user.username ? `<button onclick="adminDeleteUser('${u.username}')" class="btn btn-small btn-danger">删除</button>` : ''}
+                        </div>
+                    </div>
+                `;
+            }
+            container.innerHTML = html;
+        } else {
+            container.innerHTML = '<div style="text-align:center; padding:20px; color:#999;">暂无用户</div>';
+        }
+    } catch (e) {
+        container.innerHTML = '<div style="text-align:center; padding:20px; color:#e74c3c;">加载失败</div>';
+    }
+}
+
+async function adminDeleteUser(username) {
+    if (!confirm(`确定要删除用户「${username}」及其所有数据吗？此操作不可恢复！`)) return;
+    
+    const user = getMealUser();
+    if (!user) return;
+    
+    try {
+        const resp = await fetch(`/api/admin/user/${encodeURIComponent(username)}`, {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: user.username })
+        });
+        const data = await resp.json();
+        
+        if (data.success) {
+            showNotification(data.message, 'success');
+            loadAdminUsers();
+        } else {
+            showNotification(data.message, 'error');
+        }
+    } catch (e) {
+        showNotification('操作失败', 'error');
+    }
+}
+
+async function loadAdminAdmins() {
+    const container = document.getElementById('adminAdminList');
+    container.innerHTML = '<div style="text-align:center; padding:20px; color:#999;">加载中...</div>';
+    
+    const user = getMealUser();
+    if (!user) return;
+    
+    try {
+        const resp = await fetch(`/api/admin/users?username=${encodeURIComponent(user.username)}`);
+        const data = await resp.json();
+        
+        if (data.success) {
+            const admins = data.users.filter(u => u.role === 'admin');
+            if (admins.length > 0) {
+                let html = '';
+                for (const u of admins) {
+                    html += `
+                        <div class="admin-user-item">
+                            <div class="admin-user-info">
+                                <div class="admin-user-name">${u.username} <span class="role-badge admin">管理员</span></div>
+                            </div>
+                            <div class="admin-user-actions">
+                                ${u.username !== user.username ? `<button onclick="adminRemoveAdmin('${u.username}')" class="btn btn-small btn-warning">移除</button>` : '<span style="color:#999;font-size:0.85em;">(自己)</span>'}
+                            </div>
+                        </div>
+                    `;
+                }
+                container.innerHTML = html;
+            } else {
+                container.innerHTML = '<div style="text-align:center; padding:20px; color:#999;">暂无管理员</div>';
+            }
+        }
+    } catch (e) {
+        container.innerHTML = '<div style="text-align:center; padding:20px; color:#e74c3c;">加载失败</div>';
+    }
+}
+
+async function adminAddAdmin() {
+    const input = document.getElementById('addAdminUsername');
+    const targetUsername = input.value.trim();
+    
+    if (!targetUsername) {
+        showNotification('请输入用户名', 'warning');
+        return;
+    }
+    
+    const user = getMealUser();
+    if (!user) return;
+    
+    try {
+        const resp = await fetch('/api/admin/add', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: user.username, target_username: targetUsername })
+        });
+        const data = await resp.json();
+        
+        if (data.success) {
+            showNotification(data.message, 'success');
+            input.value = '';
+            loadAdminAdmins();
+        } else {
+            showNotification(data.message, 'error');
+        }
+    } catch (e) {
+        showNotification('操作失败', 'error');
+    }
+}
+
+async function adminRemoveAdmin(username) {
+    if (!confirm(`确定要移除「${username}」的管理员权限吗？`)) return;
+    
+    const user = getMealUser();
+    if (!user) return;
+    
+    try {
+        const resp = await fetch('/api/admin/remove', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: user.username, target_username: username })
+        });
+        const data = await resp.json();
+        
+        if (data.success) {
+            showNotification(data.message, 'success');
+            loadAdminAdmins();
+        } else {
+            showNotification(data.message, 'error');
+        }
+    } catch (e) {
+        showNotification('操作失败', 'error');
+    }
+}
+
+async function loadAdminStats() {
+    const container = document.getElementById('adminStatsContent');
+    container.innerHTML = '<div style="text-align:center; padding:20px; color:#999;">加载中...</div>';
+    
+    const user = getMealUser();
+    if (!user) return;
+    
+    try {
+        const resp = await fetch(`/api/admin/stats?username=${encodeURIComponent(user.username)}`);
+        const data = await resp.json();
+        
+        if (data.success) {
+            const s = data.stats;
+            container.innerHTML = `
+                <div class="stat-card">
+                    <div class="stat-value">${s.school_count}</div>
+                    <div class="stat-label">学校数量</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">${s.user_count}</div>
+                    <div class="stat-label">用户总数</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">${s.admin_count}</div>
+                    <div class="stat-label">管理员数</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">${s.total_meal_logs}</div>
+                    <div class="stat-label">打卡记录</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">${s.total_dishes_logged}</div>
+                    <div class="stat-label">菜品记录</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">${s.dish_tags_count}</div>
+                    <div class="stat-label">菜品标签</div>
+                </div>
+            `;
+        } else {
+            container.innerHTML = '<div style="text-align:center; padding:20px; color:#e74c3c;">加载失败</div>';
+        }
+    } catch (e) {
+        container.innerHTML = '<div style="text-align:center; padding:20px; color:#e74c3c;">加载失败</div>';
+    }
 }

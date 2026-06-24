@@ -2000,3 +2000,220 @@ body {
         font-size: 0.98em !important;
     }
 }
+
+/* ========== 管理员面板 ========== */
+.btn-admin {
+    background: linear-gradient(135deg, #f39c12 0%, #e67e22 100%);
+    color: white;
+}
+
+.btn-admin:hover {
+    box-shadow: 0 4px 12px rgba(243, 156, 18, 0.3);
+}
+
+.btn-danger {
+    background: linear-gradient(135deg, #eb3349 0%, #f45c43 100%);
+    color: white;
+}
+
+.btn-danger:hover {
+    box-shadow: 0 4px 12px rgba(235, 51, 73, 0.3);
+}
+
+.admin-modal-content {
+    max-width: 700px;
+    max-height: 85vh;
+    overflow-y: auto;
+    padding: 25px 20px;
+}
+
+.admin-tabs {
+    display: flex;
+    gap: 0;
+    border-bottom: 2px solid #e0e0e0;
+    margin-bottom: 20px;
+}
+
+.admin-tab {
+    flex: 1;
+    padding: 12px 8px;
+    border: none;
+    background: #f8f9fa;
+    cursor: pointer;
+    font-size: 0.9em;
+    font-weight: 500;
+    color: #666;
+    transition: all 0.2s;
+    border-bottom: 3px solid transparent;
+    margin-bottom: -2px;
+    border-radius: 8px 8px 0 0;
+}
+
+.admin-tab:hover {
+    background: #eef;
+    color: #667eea;
+}
+
+.admin-tab.active {
+    background: linear-gradient(135deg, #667eea15, #764ba215);
+    color: #667eea;
+    border-bottom-color: #667eea;
+    font-weight: bold;
+}
+
+.admin-tab-content {
+    display: none;
+}
+
+.admin-tab-content.active {
+    display: block;
+    animation: fadeIn 0.3s ease;
+}
+
+.admin-school-list,
+.admin-user-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.admin-school-item,
+.admin-user-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 16px;
+    background: #f8f9fa;
+    border-radius: 10px;
+    border: 1px solid #e9ecef;
+    transition: all 0.2s ease;
+}
+
+.admin-school-item:hover,
+.admin-user-item:hover {
+    background: #f0f4ff;
+    border-color: #667eea;
+}
+
+.admin-school-name,
+.admin-user-name {
+    font-weight: 600;
+    color: #333;
+    font-size: 1em;
+}
+
+.admin-school-actions {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.admin-user-info {
+    flex: 1;
+}
+
+.admin-user-meta {
+    font-size: 0.8em;
+    color: #999;
+    margin-top: 3px;
+}
+
+.admin-user-actions {
+    display: flex;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.admin-add-admin-form {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+.admin-add-admin-form .form-control {
+    flex: 1;
+}
+
+.admin-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+}
+
+.stat-card {
+    text-align: center;
+    padding: 20px 15px;
+    background: linear-gradient(135deg, #f5f7fa 0%, #e8ecf1 100%);
+    border-radius: 12px;
+    border: 1px solid #e0e0e0;
+}
+
+.stat-value {
+    font-size: 2em;
+    font-weight: bold;
+    color: #667eea;
+    display: block;
+}
+
+.stat-label {
+    font-size: 0.85em;
+    color: #888;
+    margin-top: 5px;
+}
+
+.role-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 0.75em;
+    font-weight: bold;
+    vertical-align: middle;
+    margin-left: 6px;
+}
+
+.role-badge.admin {
+    background: linear-gradient(135deg, #f39c12, #e67e22);
+    color: white;
+}
+
+@media (max-width: 768px) {
+    .admin-modal-content {
+        padding: 20px 15px;
+    }
+
+    .admin-tabs {
+        flex-wrap: wrap;
+        gap: 4px;
+    }
+
+    .admin-tab {
+        flex: 1 1 calc(50% - 4px);
+        font-size: 0.82em;
+        padding: 10px 6px;
+    }
+
+    .admin-stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .admin-school-item,
+    .admin-user-item {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+    }
+
+    .admin-school-actions,
+    .admin-user-actions {
+        width: 100%;
+        justify-content: flex-end;
+    }
+
+    .admin-add-admin-form {
+        flex-direction: column;
+    }
+
+    .admin-add-admin-form .btn {
+        width: 100%;
+    }
+}

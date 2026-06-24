@@ -36,13 +36,16 @@
             <div class="checkin-bar-left" onclick="showMealCheckin()">
                 <span class="checkin-date" id="checkinDateDisplay"></span>
                 <div class="checkin-dots">
-                    <span class="checkin-dot" id="dotBreakfast" title="早餐">🌅</span>
+                    <span class="checkin-dot" id="dotBreakfast" title="早餐"></span>
                     <span class="checkin-dot" id="dotLunch" title="午餐">☀️</span>
                     <span class="checkin-dot" id="dotDinner" title="晚餐">🌙</span>
                 </div>
                 <span class="checkin-summary" id="checkinSummary">今日还未打卡</span>
             </div>
-            <button onclick="showMealCheckin()" class="btn btn-warning btn-small">📝 打卡</button>
+            <div class="checkin-bar-right">
+                <button onclick="showMealCheckin()" class="btn btn-warning btn-small">📝 打卡</button>
+                <button onclick="showAdminPanel()" class="btn btn-admin btn-small" id="adminBtn" style="display:none;">⚙️ 管理</button>
+            </div>
         </div>
 
         <!-- ===== 饮食目标区域 ===== -->
@@ -267,11 +270,11 @@
                     </div>
                 </div>
 
-                <div class="wizard-footer" id="fetcherFooter">
-                    <button id="fetcherActionBtn" onclick="startFetchDishes()" class="btn btn-primary btn-large">
+                <div class="wizard-footer" id="fetcherFooter" style="display:flex;gap:8px;flex-wrap:wrap;">
+                    <button id="fetcherActionBtn" onclick="startFetchDishes()" class="btn btn-primary" style="flex:2;min-width:140px;">
                         开始获取
                     </button>
-                    <button onclick="closeDishFetcher()" class="btn btn-secondary btn-large">
+                    <button onclick="closeDishFetcher()" class="btn btn-secondary" style="flex:1;min-width:80px;">
                         取消
                     </button>
                 </div>
@@ -401,7 +404,57 @@
             </div>
         </div>
 
-        <!-- 页脚 -->
+        
+        <!-- 管理员面板弹窗 -->
+        <div id="adminModal" class="modal">
+            <div class="modal-content admin-modal-content">
+                <span class="close-btn" onclick="closeAdminPanel()">&times;</span>
+                <h2 style="text-align:center; margin-bottom: 5px;">⚙️ 管理员面板</h2>
+                <p style="text-align:center; color:#999; margin-bottom: 20px; font-size:0.9em;">当前管理员：<span id="adminUsernameDisplay"></span></p>
+                
+                <!-- 标签页导航 -->
+                <div class="admin-tabs">
+                    <button class="admin-tab active" onclick="switchAdminTab('menu')">📋 菜单管理</button>
+                    <button class="admin-tab" onclick="switchAdminTab('users')">👥 用户管理</button>
+                    <button class="admin-tab" onclick="switchAdminTab('admins')">🔑 管理员</button>
+                    <button class="admin-tab" onclick="switchAdminTab('stats')">📊 统计</button>
+                </div>
+                
+                <!-- 菜单管理标签页 -->
+                <div id="adminTabMenu" class="admin-tab-content active">
+                    <div id="adminMenuList" class="admin-school-list">
+                        <div style="text-align:center; padding:20px; color:#999;">加载中...</div>
+                    </div>
+                </div>
+                
+                <!-- 用户管理标签页 -->
+                <div id="adminTabUsers" class="admin-tab-content">
+                    <div id="adminUserList" class="admin-user-list">
+                        <div style="text-align:center; padding:20px; color:#999;">加载中...</div>
+                    </div>
+                </div>
+                
+                <!-- 管理员管理标签页 -->
+                <div id="adminTabAdmins" class="admin-tab-content">
+                    <div class="admin-add-admin-form">
+                        <input type="text" id="addAdminUsername" class="form-control" placeholder="输入要设为管理员的用户名">
+                        <button onclick="adminAddAdmin()" class="btn btn-primary btn-small">添加管理员</button>
+                    </div>
+                    <div id="adminAdminList" class="admin-user-list" style="margin-top:15px;">
+                        <div style="text-align:center; padding:20px; color:#999;">加载中...</div>
+                    </div>
+                </div>
+                
+                <!-- 统计标签页 -->
+                <div id="adminTabStats" class="admin-tab-content">
+                    <div id="adminStatsContent" class="admin-stats-grid">
+                        <div style="text-align:center; padding:20px; color:#999;">加载中...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+<!-- 页脚 -->
         <footer class="footer">
             <p>&copy; 2026 吃了么 | 让每一餐都更健康</p>
         </footer>

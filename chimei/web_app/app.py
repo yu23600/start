@@ -3,12 +3,93 @@ import json
 import os
 import random
 import time
-from dish_fetcher import fetch_dishes, get_available_sources, get_all_supported_schools
+import hashlib
+import secrets
+from dish_fetcher import fetch_dishes, get_available_sources, get_all_supported_schools, CURATED_DATABASE
 
 app = Flask(__name__)
 
 # ========== 全局配置 ==========
 DATA_FILE = "cafeteria_data.json"
+MEAL_USERS_FILE = "meal_users.json"
+MEAL_LOGS_FILE = "meal_logs.json"
+USER_TAGS_FILE = "user_dish_tags.json"
+
+# ========== 管理员配置 ==========
+ADMIN_USERNAMES = ['nick3448450113']  # 预设管理员账号列表
+
+def is_admin(username):
+    """检查用户是否为管理员"""
+    if not username:
+        return False
+    if username in ADMIN_USERNAMES:
+        return True
+    users = load_meal_users()
+    if username in users:
+        return users[username].get('role') == 'admin'
+    return False
+
+
+# ========== 打卡用户管理 ==========
+def load_meal_users():
+    """加载打卡用户列表"""
+    if not os.path.exists(MEAL_USERS_FILE):
+        return {}
+    try:
+        with open(MEAL_USERS_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return data if isinstance(data, dict) else {}
+    except Exception as e:
+        print(f"加载打卡用户出错: {e}")
+        return {}
+
+
+def save_meal_users(users):
+    """保存打卡用户列表"""
+    try:
+        with open(MEAL_USERS_FILE, "w", encoding="utf-8") as f:
+            json.dump(users, f, ensure_ascii=False, indent=2)
+        return True
+    except Exception as e:
+        print(f"保存打卡用户出错: {e}")
+        return False
+
+
+def load_meal_logs():
+    """加载三餐打卡记录"""
+    if not os.path.exists(MEAL_LOGS_FILE):
+        return {}
+    try:
+        with open(MEAL_LOGS_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return data if isinstance(data, dict) else {}
+    except Exception as e:
+        print(f"加载打卡记录出错: {e}")
+        return {}
+
+
+def save_meal_logs(logs):
+    """保存三餐打卡记录"""
+    try:
+        with open(MEAL_LOGS_FILE, "w", encoding="utf-8") as f:
+            json.dump(logs, f, ensure_ascii=False, indent=2)
+        return True
+    except Exception as e:
+        print(f"保存打卡记录出错: {e}")
+        return False
+
+
+def load_user_dish_tags():
+    """加载用户提交的菜品标签"""
+    if not os.path.exists(USER_TAGS_FILE):
+        return {}
+    try:
+        with open(USER_TAGS_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return data if isinstance(data, dict) else {}
+    except Exception as e:
+        print(f"加载用户标签出错: {e}")
+        return {}
 
 # ========== 营养规则库 ==========
 NUTRITION_RULES = {
@@ -488,6 +569,236 @@ def get_supported_schools():
         "success": True,
         "schools": schools,
         "total": len(schools)
+    })
+
+
+# ========== 管理员 API ==========
+@app.route('/api/admin/menu/reset', methods=['POST'])
+def admin_reset_menu():
+    """管理员重置指定学校菜单为精选版本"""
+    data = request.json or {}
+    username = data.get('username', '').strip()
+    school_name = data.get('school_name', '').strip()
+    
+    if not username or not is_admin(username):
+        return jsonify({"success": False, "message": "需要管理员权限"}), 403
+    if not school_name:
+        return jsonify({"success": False, "message": "学校名称不能为空"}), 400
+    
+    if school_name not in CURATED_DATABASE:
+        return jsonify({"success": False, "message": f"精选数据库中暂无 {school_name} 的数据"}), 404
+    
+    curated_dishes = CURATED_DATABASE[school_name]["dishes"]
+    formatted_menu = "\n".join(curated_dishes)
+    now = time.strftime("%Y-%m-%d %H:%M")
+    
+    db_data = load_all_data()
+    db_data[school_name] = {"menu": formatted_menu, "last_modified": now}
+    save_all_data(db_data)
+    
+    return jsonify({
+        "success": True,
+        "message": f"已将「{school_name}」菜单重置为精选版本（{len(curated_dishes)} 道菜品）",
+        "count": len(curated_dishes)
+    })
+
+
+@app.route('/api/admin/menu/clear', methods=['POST'])
+def admin_clear_menu():
+    """管理员清空指定学校菜单"""
+    data = request.json or {}
+    username = data.get('username', '').strip()
+    school_name = data.get('school_name', '').strip()
+    
+    if not username or not is_admin(username):
+        return jsonify({"success": False, "message": "需要管理员权限"}), 403
+    if not school_name:
+        return jsonify({"success": False, "message": "学校名称不能为空"}), 400
+    
+    db_data = load_all_data()
+    if school_name in db_data:
+        del db_data[school_name]
+    save_all_data(db_data)
+    
+    return jsonify({
+        "success": True,
+        "message": f"已清空「{school_name}」的菜单"
+    })
+
+
+@app.route('/api/admin/menu/edit', methods=['POST'])
+def admin_edit_menu():
+    """管理员直接编辑指定学校菜单"""
+    data = request.json or {}
+    username = data.get('username', '').strip()
+    school_name = data.get('school_name', '').strip()
+    menu = data.get('menu', '')
+    
+    if not username or not is_admin(username):
+        return jsonify({"success": False, "message": "需要管理员权限"}), 403
+    if not school_name:
+        return jsonify({"success": False, "message": "学校名称不能为空"}), 400
+    
+    items = [item.strip() for item in menu.replace(",", "\n").split("\n") if item.strip()]
+    formatted_menu = "\n".join(items)
+    now = time.strftime("%Y-%m-%d %H:%M")
+    
+    db_data = load_all_data()
+    db_data[school_name] = {"menu": formatted_menu, "last_modified": now}
+    save_all_data(db_data)
+    
+    return jsonify({
+        "success": True,
+        "message": f"已更新「{school_name}」菜单（{len(items)} 道菜品）",
+        "count": len(items)
+    })
+
+
+@app.route('/api/admin/users', methods=['GET'])
+def admin_get_users():
+    """管理员获取所有用户列表"""
+    username = request.args.get('username', '').strip()
+    if not username or not is_admin(username):
+        return jsonify({"success": False, "message": "需要管理员权限"}), 403
+    
+    users = load_meal_users()
+    logs = load_meal_logs()
+    
+    user_list = []
+    for name, info in users.items():
+        meal_count = 0
+        if name in logs:
+            for date_data in logs[name].values():
+                for meal_dishes in date_data.values():
+                    meal_count += len(meal_dishes)
+        user_list.append({
+            "username": name,
+            "role": info.get('role', 'user'),
+            "created_at": info.get('created_at', ''),
+            "goal": info.get('goal', ''),
+            "meal_count": meal_count
+        })
+    
+    return jsonify({
+        "success": True,
+        "users": sorted(user_list, key=lambda x: x.get('created_at', ''), reverse=True),
+        "total": len(user_list)
+    })
+
+
+@app.route('/api/admin/user/<target_username>', methods=['DELETE'])
+def admin_delete_user(target_username):
+    """管理员删除用户"""
+    data = request.json or {}
+    username = data.get('username', '').strip()
+    
+    if not username or not is_admin(username):
+        return jsonify({"success": False, "message": "需要管理员权限"}), 403
+    if not target_username:
+        return jsonify({"success": False, "message": "目标用户不能为空"}), 400
+    
+    users = load_meal_users()
+    if target_username not in users:
+        return jsonify({"success": False, "message": "用户不存在"}), 404
+    
+    del users[target_username]
+    save_meal_users(users)
+    
+    logs = load_meal_logs()
+    if target_username in logs:
+        del logs[target_username]
+        save_meal_logs(logs)
+    
+    return jsonify({
+        "success": True,
+        "message": f"已删除用户「{target_username}」及其所有数据"
+    })
+
+
+@app.route('/api/admin/add', methods=['POST'])
+def admin_add_admin():
+    """添加管理员"""
+    data = request.json or {}
+    username = data.get('username', '').strip()
+    target_username = data.get('target_username', '').strip()
+    
+    if not username or not is_admin(username):
+        return jsonify({"success": False, "message": "需要管理员权限"}), 403
+    if not target_username:
+        return jsonify({"success": False, "message": "目标用户不能为空"}), 400
+    
+    users = load_meal_users()
+    if target_username not in users:
+        return jsonify({"success": False, "message": "用户不存在"}), 404
+    
+    users[target_username]['role'] = 'admin'
+    if target_username not in ADMIN_USERNAMES:
+        ADMIN_USERNAMES.append(target_username)
+    
+    if save_meal_users(users):
+        return jsonify({"success": True, "message": f"已将「{target_username}」设为管理员"})
+    else:
+        return jsonify({"success": False, "message": "保存失败"}), 500
+
+
+@app.route('/api/admin/remove', methods=['POST'])
+def admin_remove_admin():
+    """移除管理员权限"""
+    data = request.json or {}
+    username = data.get('username', '').strip()
+    target_username = data.get('target_username', '').strip()
+    
+    if not username or not is_admin(username):
+        return jsonify({"success": False, "message": "需要管理员权限"}), 403
+    if not target_username:
+        return jsonify({"success": False, "message": "目标用户不能为空"}), 400
+    if target_username == username:
+        return jsonify({"success": False, "message": "不能移除自己的管理员权限"}), 400
+    
+    users = load_meal_users()
+    if target_username not in users:
+        return jsonify({"success": False, "message": "用户不存在"}), 404
+    
+    users[target_username]['role'] = 'user'
+    if target_username in ADMIN_USERNAMES:
+        ADMIN_USERNAMES.remove(target_username)
+    
+    if save_meal_users(users):
+        return jsonify({"success": True, "message": f"已移除「{target_username}」的管理员权限"})
+    else:
+        return jsonify({"success": False, "message": "保存失败"}), 500
+
+
+@app.route('/api/admin/stats', methods=['GET'])
+def admin_get_stats():
+    """获取系统统计"""
+    username = request.args.get('username', '').strip()
+    if not username or not is_admin(username):
+        return jsonify({"success": False, "message": "需要管理员权限"}), 403
+    
+    db_data = load_all_data()
+    users = load_meal_users()
+    logs = load_meal_logs()
+    user_tags = load_user_dish_tags()
+    
+    total_meals = 0
+    total_dishes = 0
+    for user_logs in logs.values():
+        for date_data in user_logs.values():
+            for meal_dishes in date_data.values():
+                total_meals += 1
+                total_dishes += len(meal_dishes)
+    
+    return jsonify({
+        "success": True,
+        "stats": {
+            "school_count": len(db_data),
+            "user_count": len(users),
+            "admin_count": sum(1 for u in users.values() if u.get('role') == 'admin' or u.get('username', '') in ADMIN_USERNAMES),
+            "total_meal_logs": total_meals,
+            "total_dishes_logged": total_dishes,
+            "dish_tags_count": len(user_tags)
+        }
     })
 
 

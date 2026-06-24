@@ -45,102 +45,113 @@
             <button onclick="showMealCheckin()" class="btn btn-warning btn-small">📝 打卡</button>
         </div>
 
-        <!-- 目标状态条 -->
-        <div class="goal-status-bar" id="goalStatusBar" onclick="showGoalSwitcher()">
-            <span id="goalStatusIcon" class="goal-status-icon">🎯</span>
-            <span id="goalStatusText" class="goal-status-text">点击设置饮食目标</span>
-            <span class="goal-status-arrow">▶</span>
-        </div>
-
-        <!-- 目标选择卡片（未选目标时显示） -->
-        <div class="section-card" id="goalCardsSection">
-            <h3 class="section-title">选择你的饮食目标</h3>
-            <div class="goal-cards" id="goalCards">
-                <div class="goal-card" data-goal="cutting" onclick="selectGoalFromCards('cutting')">
-                    <div class="goal-icon">🔥</div>
-                    <div class="goal-name">减脂期</div>
-                    <div class="goal-desc">控制热量，清淡饮食为主</div>
-                </div>
-                <div class="goal-card" data-goal="bulking" onclick="selectGoalFromCards('bulking')">
-                    <div class="goal-icon">💪</div>
-                    <div class="goal-name">增肌期</div>
-                    <div class="goal-desc">高蛋白饮食，助力肌肉生长</div>
-                </div>
-                <div class="goal-card" data-goal="healthy" onclick="selectGoalFromCards('healthy')">
-                    <div class="goal-icon">🌿</div>
-                    <div class="goal-name">保持健康</div>
-                    <div class="goal-desc">均衡营养，什么都吃点</div>
-                </div>
+        <!-- ===== 饮食目标区域 ===== -->
+        <div class="layout-section" id="goalArea">
+            <div class="goal-status-bar" id="goalStatusBar" onclick="showGoalSwitcher()">
+                <span id="goalStatusIcon" class="goal-status-icon">🎯</span>
+                <span id="goalStatusText" class="goal-status-text">点击设置饮食目标</span>
+                <span class="goal-status-arrow">▶</span>
             </div>
-        </div>
 
-        <!-- 过敏设置 -->
-        <div class="section-card">
-            <h3 class="section-title" onclick="toggleAllergyPanel()" style="cursor:pointer;">
-                过敏设置（可选） <span id="allergyToggleIcon" style="font-size:0.8em;">▶</span>
-            </h3>
-            <div id="allergyPanel" style="display:none;">
-                <div class="checkbox-grid">
-                    <label class="checkbox-label">
-                        <input type="checkbox" id="allergy_seafood" value="海鲜过敏" onchange="saveAllergies()"> 海鲜过敏
-                    </label>
-                    <label class="checkbox-label">
-                        <input type="checkbox" id="allergy_peanut" value="花生过敏" onchange="saveAllergies()"> 花生过敏
-                    </label>
-                    <label class="checkbox-label">
-                        <input type="checkbox" id="allergy_lactose" value="乳糖不耐" onchange="saveAllergies()"> 乳糖不耐
-                    </label>
-                </div>
-                <p class="hint">过敏信息会始终生效，确保推荐安全</p>
-            </div>
-        </div>
-
-        <!-- BMI 计算器 -->
-        <div class="section-card">
-            <h3 class="section-title" onclick="toggleBmiPanel()" style="cursor:pointer;">
-                BMI 计算器 <span id="bmiToggleIcon" style="font-size:0.8em;">▶</span>
-            </h3>
-            <div id="bmiPanel" style="display:none;">
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="heightInput">身高(cm):</label>
-                        <input type="number" id="heightInput" class="form-control" placeholder="例如: 170" step="0.1">
+            <div class="section-card" id="goalCardsSection">
+                <h3 class="section-title">选择你的饮食目标</h3>
+                <div class="goal-cards" id="goalCards">
+                    <div class="goal-card" data-goal="cutting" onclick="selectGoalFromCards('cutting')">
+                        <div class="goal-icon">🔥</div>
+                        <div class="goal-name">减脂期</div>
+                        <div class="goal-desc">控制热量，清淡饮食为主</div>
                     </div>
-                    <div class="form-group">
-                        <label for="weightInput">体重(kg):</label>
-                        <input type="number" id="weightInput" class="form-control" placeholder="例如: 60" step="0.1">
+                    <div class="goal-card" data-goal="bulking" onclick="selectGoalFromCards('bulking')">
+                        <div class="goal-icon"></div>
+                        <div class="goal-name">增肌期</div>
+                        <div class="goal-desc">高蛋白饮食，助力肌肉生长</div>
                     </div>
-                    <button onclick="calculateBMI()" class="btn btn-small" style="align-self:flex-end;">计算</button>
+                    <div class="goal-card" data-goal="healthy" onclick="selectGoalFromCards('healthy')">
+                        <div class="goal-icon">🌿</div>
+                        <div class="goal-name">保持健康</div>
+                        <div class="goal-desc">均衡营养，什么都吃点</div>
+                    </div>
                 </div>
-                <div id="bmiResult" class="bmi-result">BMI: 未计算</div>
-                <p class="hint">标准: 18.5-24正常, &lt;18.5偏瘦, ≥24偏胖</p>
             </div>
         </div>
 
-        <!-- 菜单查看/修改 -->
-        <div class="section-card">
-            <div style="display:flex;align-items:center;justify-content:space-between;">
-                <h3 class="section-title" style="margin:0;">当前菜单 <span id="itemCount" class="item-count">(0 项)</span></h3>
-                <button onclick="showMenuEditor()" class="btn btn-secondary btn-small">查看 / 修改</button>
+        <!-- ===== 个人设置 ===== -->
+        <div class="layout-section">
+            <div class="settings-group">
+                <div class="section-card collapsible-card">
+                    <h3 class="section-title collapsible-title" onclick="toggleAllergyPanel()">
+                        <span>🛡️ 过敏设置</span>
+                        <span class="collapse-icon" id="allergyToggleIcon">▶</span>
+                    </h3>
+                    <div id="allergyPanel" class="collapsible-body" style="display:none;">
+                        <div class="checkbox-grid">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="allergy_seafood" value="海鲜过敏" onchange="saveAllergies()"> 海鲜过敏
+                            </label>
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="allergy_peanut" value="花生过敏" onchange="saveAllergies()"> 花生过敏
+                            </label>
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="allergy_lactose" value="乳糖不耐" onchange="saveAllergies()"> 乳糖不耐
+                            </label>
+                        </div>
+                        <p class="hint">过敏信息会始终生效，确保推荐安全</p>
+                    </div>
+                </div>
+
+                <div class="section-card collapsible-card">
+                    <h3 class="section-title collapsible-title" onclick="toggleBmiPanel()">
+                        <span>️ BMI 计算器</span>
+                        <span class="collapse-icon" id="bmiToggleIcon">▶</span>
+                    </h3>
+                    <div id="bmiPanel" class="collapsible-body" style="display:none;">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="heightInput">身高(cm):</label>
+                                <input type="number" id="heightInput" class="form-control" placeholder="例如: 170" step="0.1">
+                            </div>
+                            <div class="form-group">
+                                <label for="weightInput">体重(kg):</label>
+                                <input type="number" id="weightInput" class="form-control" placeholder="例如: 60" step="0.1">
+                            </div>
+                            <button onclick="calculateBMI()" class="btn btn-small" style="align-self:flex-end;">计算</button>
+                        </div>
+                        <div id="bmiResult" class="bmi-result">BMI: 未计算</div>
+                        <p class="hint">标准: 18.5-24正常, &lt;18.5偏瘦, ≥24偏胖</p>
+                    </div>
+                </div>
             </div>
         </div>
 
-        <!-- 智能推荐 -->
-        <div class="action-section">
-            <button onclick="smartRecommend()" class="btn btn-success btn-large">
-                帮我决定今天吃什么 👉
-            </button>
+        <!-- ===== 菜单与推荐 ===== -->
+        <div class="layout-section">
+            <div class="section-card menu-card">
+                <div style="display:flex;align-items:center;justify-content:space-between;">
+                    <div>
+                        <h3 class="section-title menu-card-title">当前菜单</h3>
+                        <span id="itemCount" class="item-count">(0 项)</span>
+                    </div>
+                    <button onclick="showMenuEditor()" class="btn btn-secondary btn-small">查看 / 修改</button>
+                </div>
+            </div>
+
+            <div class="main-action-area">
+                <button onclick="smartRecommend()" class="btn btn-success btn-large main-cta-btn">
+                    帮我决定今天吃什么 👉
+                </button>
+            </div>
         </div>
 
-
-        <!-- 次要操作 -->
-        <div class="secondary-actions">
-            <button onclick="showDishFetcher()" class="btn btn-info btn-small-action">🔍 获取菜品</button>
-            <button onclick="exportData()" class="btn btn-secondary btn-small-action">📤 导出</button>
-            <button onclick="document.getElementById('importFileInput').click()" class="btn btn-secondary btn-small-action">📥 导入</button>
-            <button onclick="showWeeklyReport()" class="btn btn-info btn-small-action">📊 报告</button>
-            <button onclick="showGallery()" class="btn btn-secondary btn-small-action">🗺️ 图鉴</button>
-            <input type="file" id="importFileInput" accept=".json" style="display:none;" onchange="importData(event)">
+        <!-- ===== 工具栏 ===== -->
+        <div class="layout-section">
+            <div class="toolbar-grid">
+                <button onclick="showDishFetcher()" class="toolbar-btn toolbar-btn-primary">🔍 获取菜品</button>
+                <button onclick="showWeeklyReport()" class="toolbar-btn toolbar-btn-info">📊 报告</button>
+                <button onclick="exportData()" class="toolbar-btn"> 导出</button>
+                <button onclick="document.getElementById('importFileInput').click()" class="toolbar-btn">📥 导入</button>
+                <button onclick="showGallery()" class="toolbar-btn">🗺️ 图鉴</button>
+                <input type="file" id="importFileInput" accept=".json" style="display:none;" onchange="importData(event)">
+            </div>
         </div>
 
         <!-- 结果弹窗 -->

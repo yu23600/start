@@ -1773,6 +1773,138 @@ body {
     border-left: 3px solid #667eea;
 }
 
+/* ========== 页面布局重构 ========== */
+
+/* 大区块间距 */
+.layout-section {
+    margin-bottom: 28px;
+}
+
+/* 设置组：过敏 + BMI 紧凑排列 */
+.settings-group {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+/* 可折叠卡片 */
+.collapsible-card {
+    padding: 14px 18px !important;
+    margin-bottom: 0 !important;
+}
+
+.collapsible-title {
+    display: flex !important;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0 !important;
+    padding-bottom: 0 !important;
+    border-bottom: none !important;
+    font-size: 1.05em !important;
+    cursor: pointer;
+    user-select: none;
+}
+
+.collapsible-title span:first-child {
+    font-weight: 600;
+}
+
+.collapse-icon {
+    font-size: 0.75em;
+    color: #999;
+    transition: transform 0.3s ease;
+}
+
+.collapsible-body {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid #eee;
+}
+
+/* 菜单卡片：更简洁 */
+.menu-card {
+    padding: 14px 18px !important;
+    margin-bottom: 16px !important;
+}
+
+.menu-card-title {
+    font-size: 1em !important;
+    color: #555 !important;
+    font-weight: 600;
+}
+
+/* 主操作区域 */
+.main-action-area {
+    margin-top: 4px;
+}
+
+.main-cta-btn {
+    border-radius: 14px !important;
+    box-shadow: 0 6px 20px rgba(17, 153, 142, 0.35) !important;
+    letter-spacing: 1px;
+}
+
+/* 工具栏 */
+.toolbar-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+}
+
+.toolbar-btn {
+    padding: 14px 10px;
+    border: none;
+    border-radius: 10px;
+    font-size: 0.92em;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    background: #f0f2f5;
+    color: #444;
+    text-align: center;
+    min-height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+}
+
+.toolbar-btn:hover {
+    background: #e4e7ec;
+    transform: translateY(-1px);
+}
+
+.toolbar-btn:active {
+    transform: translateY(0) scale(0.97);
+}
+
+.toolbar-btn-primary {
+    background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+    color: white;
+}
+
+.toolbar-btn-primary:hover {
+    box-shadow: 0 4px 12px rgba(79, 172, 254, 0.3);
+}
+
+.toolbar-btn-info {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+}
+
+.toolbar-btn-info:hover {
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+}
+
+/* 目标区域：状态条和卡片间距更小 */
+#goalArea .goal-status-bar {
+    margin: 0 0 12px 0;
+}
+
+#goalArea .section-card {
+    margin-bottom: 0;
+}
+
 /* ========== 今日打卡状态条 ========== */
 .today-checkin-bar {
     display: flex;
@@ -1837,5 +1969,34 @@ body {
 
     .briefing-score {
         font-size: 2.8em;
+    }
+
+    /* 布局重构移动端 */
+    .layout-section {
+        margin-bottom: 22px;
+    }
+
+    .toolbar-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 8px;
+    }
+
+    .toolbar-btn {
+        padding: 12px 8px;
+        font-size: 0.88em;
+        min-height: 44px;
+    }
+
+    .main-cta-btn {
+        padding: 18px 24px !important;
+        font-size: 1.15em !important;
+    }
+
+    .collapsible-card {
+        padding: 12px 14px !important;
+    }
+
+    .collapsible-title {
+        font-size: 0.98em !important;
     }
 }

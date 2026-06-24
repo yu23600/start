@@ -452,11 +452,13 @@ function showMenuEditor() {
     document.getElementById('editorSchoolHint').textContent = `「${currentSchool}」共 ${editorDishes.length} 道菜品`;
     document.getElementById('addDishArea').style.display = 'none';
     // 恢复保存按钮文本
-    const saveBtn = document.querySelector('[onclick="saveMenuFromEditor()"]');
+    const saveBtn = document.getElementById('saveMenuBtn');
     if (saveBtn) {
         saveBtn.style.background = '';
         saveBtn.textContent = '💾 保存菜单';
     }
+    const hint = document.getElementById('saveHint');
+    if (hint) hint.style.display = 'none';
     document.getElementById('menuEditorModal').classList.add('show');
     renderDishList();
 }
@@ -469,11 +471,13 @@ function closeMenuEditor() {
     document.getElementById('menuEditorModal').classList.remove('show');
     editorDishes = [];
     // 恢复保存按钮文本
-    const saveBtn = document.querySelector('[onclick="saveMenuFromEditor()"]');
+    const saveBtn = document.getElementById('saveMenuBtn');
     if (saveBtn) {
         saveBtn.style.background = '';
         saveBtn.textContent = '💾 保存菜单';
     }
+    const hint = document.getElementById('saveHint');
+    if (hint) hint.style.display = 'none';
 }
 
 function renderDishList() {
@@ -631,11 +635,13 @@ let editorHasUnsavedChanges = false;
 
 function markEditorDirty() {
     editorHasUnsavedChanges = true;
-    const saveBtn = document.querySelector('[onclick="saveMenuFromEditor()"]');
+    const saveBtn = document.getElementById('saveMenuBtn');
     if (saveBtn) {
         saveBtn.style.background = 'linear-gradient(135deg, #e74c3c 0%, #c0392b 100%)';
-        saveBtn.textContent = '💾 保存菜单（有更改未保存）';
+        saveBtn.textContent = '💾 保存菜单（有更改）';
     }
+    const hint = document.getElementById('saveHint');
+    if (hint) hint.style.display = 'block';
 }
 
 async function saveMenuFromEditor() {

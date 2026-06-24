@@ -438,10 +438,11 @@
                 <!-- 底部按钮 -->
                 <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
                     <button onclick="showAddDishArea()" class="btn btn-success btn-small">+ 添加菜品</button>
-                    <button onclick="saveMenuFromEditor()" class="btn btn-primary btn-small">💾 保存菜单</button>
+                    <button onclick="saveMenuFromEditor()" class="btn btn-primary" id="saveMenuBtn" style="min-width:160px;font-weight:700;">💾 保存菜单</button>
                     <button onclick="closeMenuEditor()" class="btn btn-secondary btn-small">关闭</button>
                 </div>
-                <p id="editorItemCount" style="text-align:center;color:#999;font-size:0.85em;margin-top:10px;"></p>
+                <p id="saveHint" style="text-align:center;color:#e74c3c;font-size:0.85em;font-weight:600;margin-top:8px;display:none;">️ 添加或删除菜品后，必须点「保存菜单」才会生效！</p>
+                <p id="editorItemCount" style="text-align:center;color:#999;font-size:0.85em;margin-top:6px;"></p>
             </div>
         </div>
 

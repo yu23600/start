@@ -12,4 +12,4 @@ services:
       - key: SUPABASE_URL
         value: https://mhbazgjiirdgcikuqlmh.supabase.co
       - key: SUPABASE_ANON_KEY
-        value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1oYmF6Z2ppaXJkZ2Npa3VxbG1oIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIyMzE1NjMsImV4cCI6MjA5NzgwNzU2M30.efeVXZSPzGnJItVpfA-_qC9mJbxFDT-6eEvs1ETSB0k
+        value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1oYmF6Z2ppaXJkZ2Npa3VxbG1oIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MjIzMTU2MywiZXhwIjoyMDk3ODA3NTYzfQ.gbC6k9SdLzDHztQIy6FD5OU2uuLvli-VZsUy9rHaATg

@@ -448,15 +448,32 @@ function showMenuEditor() {
         const text = menuText ? menuText.value.trim() : '';
         editorDishes = text ? text.split('\n').map(s => s.trim()).filter(s => s) : [];
     }
+    editorHasUnsavedChanges = false;
     document.getElementById('editorSchoolHint').textContent = `「${currentSchool}」共 ${editorDishes.length} 道菜品`;
     document.getElementById('addDishArea').style.display = 'none';
+    // 恢复保存按钮文本
+    const saveBtn = document.querySelector('[onclick="saveMenuFromEditor()"]');
+    if (saveBtn) {
+        saveBtn.style.background = '';
+        saveBtn.textContent = '💾 保存菜单';
+    }
     document.getElementById('menuEditorModal').classList.add('show');
     renderDishList();
 }
 
 function closeMenuEditor() {
+    if (editorHasUnsavedChanges) {
+        if (!confirm('有更改尚未保存，确定要关闭吗？')) return;
+    }
+    editorHasUnsavedChanges = false;
     document.getElementById('menuEditorModal').classList.remove('show');
     editorDishes = [];
+    // 恢复保存按钮文本
+    const saveBtn = document.querySelector('[onclick="saveMenuFromEditor()"]');
+    if (saveBtn) {
+        saveBtn.style.background = '';
+        saveBtn.textContent = '💾 保存菜单';
+    }
 }
 
 function renderDishList() {
@@ -480,6 +497,7 @@ function deleteDishFromEditor(index) {
     const dish = editorDishes[index];
     editorDishes.splice(index, 1);
     renderDishList();
+    markEditorDirty();
     showNotification(`已移除「${dish}」`, 'info');
 }
 
@@ -513,11 +531,14 @@ async function confirmAddDish() {
     // 先立即加入列表并刷新显示
     editorDishes.push(name);
     renderDishList();
-    showNotification(`已添加「${name}」`, 'success');
+    markEditorDirty();
+    showNotification(`已添加「${name}」，记得点保存哦`, 'success');
+    // 保持输入框可见，清空以便继续添加
     input.value = '';
+    input.focus();
     pendingAddDish = name;
     pendingAddTags = [];
-    // 再显示标注区域（可选）
+    // 显示标注区域（可选）
     await showAddDishTagUI(name);
 }
 
@@ -605,6 +626,18 @@ function resetAddDishArea() {
     pendingAddTags = [];
 }
 
+// 标记编辑器有未保存的更改
+let editorHasUnsavedChanges = false;
+
+function markEditorDirty() {
+    editorHasUnsavedChanges = true;
+    const saveBtn = document.querySelector('[onclick="saveMenuFromEditor()"]');
+    if (saveBtn) {
+        saveBtn.style.background = 'linear-gradient(135deg, #e74c3c 0%, #c0392b 100%)';
+        saveBtn.textContent = '💾 保存菜单（有更改未保存）';
+    }
+}
+
 async function saveMenuFromEditor() {
     if (!currentSchool) {
         showNotification('请先选择一个学校！', 'warning');
@@ -626,6 +659,7 @@ async function saveMenuFromEditor() {
             if (menuText) menuText.value = data.menu;
             document.getElementById('itemCount').textContent = `(${data.count} 项)`;
             schoolMenuItems = data.menu.split('\n').map(s => s.trim()).filter(s => s);
+            editorHasUnsavedChanges = false;
             const syncMsg = data.cloud_synced ? '菜单已保存到云端！' : '菜单已保存（云端同步失败，仅本地保存）';
             showNotification(syncMsg, data.cloud_synced ? 'success' : 'warning');
             closeMenuEditor();

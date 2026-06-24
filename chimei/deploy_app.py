@@ -3191,6 +3191,7 @@ def system_status():
         "supabase_connected": supabase_client is not None,
         "supabase_url": SUPABASE_URL[:30] + "..." if SUPABASE_URL else "(未设置)",
         "storage_backend": "supabase" if supabase_client else "local_json (临时!)",
+        "deploy_id": "v15-lb-fix-0625",
     }
     import os
     for name, path in [("cafeteria_data", DATA_FILE), ("meal_logs", MEAL_LOGS_FILE),

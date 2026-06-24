@@ -2428,3 +2428,68 @@ body {
         padding: 22px 15px 20px;
     }
 }
+
+/* ========== 系统更新维护遮罩 ========== */
+.maintenance-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(255, 255, 255, 0.96);
+    z-index: 99999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(4px);
+}
+
+.maintenance-content {
+    text-align: center;
+    padding: 40px;
+    max-width: 360px;
+}
+
+.maintenance-icon {
+    font-size: 3em;
+    margin-bottom: 16px;
+    animation: maintenanceBounce 1.5s ease-in-out infinite;
+}
+
+.maintenance-content h2 {
+    color: #2c3e50;
+    font-size: 1.4em;
+    margin-bottom: 10px;
+}
+
+.maintenance-content p {
+    color: #7f8c8d;
+    font-size: 0.95em;
+    line-height: 1.5;
+}
+
+.maintenance-spinner {
+    width: 36px;
+    height: 36px;
+    border: 3px solid #e0e0e0;
+    border-top-color: #667eea;
+    border-radius: 50%;
+    margin: 20px auto 0;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+@keyframes maintenanceBounce {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-8px); }
+}
+
+/* ========== 页脚版本号 ========== */
+.footer-version {
+    font-size: 0.78em;
+    color: #bdc3c7;
+    margin-top: 4px;
+}

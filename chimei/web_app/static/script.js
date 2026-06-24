@@ -113,13 +113,91 @@ const CAMPUS_DATA = {
 
 // ========== 初始化 ==========
 document.addEventListener('DOMContentLoaded', function() {
+    runHealthCheck();
+});
+
+/**
+ * 启动健康检查：确认后端可用后再初始化页面
+ * 如果后端不可用（部署中），显示维护遮罩
+ */
+async function runHealthCheck() {
+    const maxRetries = 3;
+    let ok = false;
+
+    for (let i = 0; i < maxRetries; i++) {
+        try {
+            const resp = await fetch('/api/version', { signal: AbortSignal.timeout(5000) });
+            if (resp.ok) {
+                const data = await resp.json();
+                if (data.success) {
+                    ok = true;
+                    // 显示版本号
+                    const verEl = document.getElementById('footerVersion');
+                    if (verEl) {
+                        let verText = `v${data.version}`;
+                        if (data.build_time) verText += ` · ${data.build_time}`;
+                        verEl.textContent = verText;
+                    }
+                    break;
+                }
+            }
+        } catch (e) {
+            // 网络错误或超时，继续重试
+            console.warn(`健康检查第${i + 1}次失败:`, e.message);
+        }
+        // 等待后重试（递增间隔）
+        if (i < maxRetries - 1) {
+            await new Promise(r => setTimeout(r, 2000 * (i + 1)));
+        }
+    }
+
+    if (ok) {
+        // 隐藏维护遮罩（如果之前显示了）
+        hideMaintenance();
+        // 正常初始化
+        initApp();
+    } else {
+        // 显示维护遮罩
+        showMaintenance();
+    }
+}
+
+/**
+ * 维护遮罩上的"重新加载"按钮
+ */
+function retryHealthCheck() {
+    const overlay = document.getElementById('maintenanceOverlay');
+    if (overlay) {
+        const btn = overlay.querySelector('button');
+        if (btn) { btn.textContent = '检查中...'; btn.disabled = true; }
+    }
+    runHealthCheck().then(() => {
+        const btn2 = document.getElementById('maintenanceOverlay')?.querySelector('button');
+        if (btn2) { btn2.textContent = '重新加载'; btn2.disabled = false; }
+    });
+}
+
+function showMaintenance() {
+    const el = document.getElementById('maintenanceOverlay');
+    if (el) el.style.display = 'flex';
+}
+
+function hideMaintenance() {
+    const el = document.getElementById('maintenanceOverlay');
+    if (el) el.style.display = 'none';
+}
+
+/**
+ * 应用正常初始化（在健康检查通过后调用）
+ */
+function initApp() {
     loadUniversitiesList(); // 加载大学列表
     checkFirstTimeUse(); // 检查是否首次使用
     loadAllergies(); // 恢复过敏设置
     loadUserGoal(); // 加载用户目标
     updateTodayCheckinBar(); // 更新顶部打卡状态
     updateDailyScore(); // 更新今日饮食评分仪表
-});
+}
 
 function setupEventListeners() {
     // 回车键触发智能推荐

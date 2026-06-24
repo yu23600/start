@@ -8,6 +8,17 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 </head>
 <body>
+    <!-- 系统更新维护遮罩 -->
+    <div id="maintenanceOverlay" class="maintenance-overlay" style="display:none;">
+        <div class="maintenance-content">
+            <div class="maintenance-icon">🔧</div>
+            <h2>系统更新中</h2>
+            <p>正在部署最新版本，请稍等片刻...</p>
+            <div class="maintenance-spinner"></div>
+            <button onclick="retryHealthCheck()" class="btn btn-primary" style="margin-top:18px;">重新加载</button>
+        </div>
+    </div>
+
     <div class="container">
         <!-- 头部 -->
         <header class="header">
@@ -498,6 +509,7 @@
 <!-- 页脚 -->
         <footer class="footer">
             <p>&copy; 2026 吃了么 | 让每一餐都更健康</p>
+            <p class="footer-version" id="footerVersion"></p>
         </footer>
     </div>
 

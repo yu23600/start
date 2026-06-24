@@ -101,6 +101,7 @@ USER_TAGS_FILE = os.path.join(BASE_DIR, 'user_dish_tags.json')
 MEAL_LOGS_FILE = os.path.join(BASE_DIR, 'meal_logs.json')
 MEAL_USERS_FILE = os.path.join(BASE_DIR, 'meal_users.json')
 DEV_CONFIG_FILE = os.path.join(BASE_DIR, 'dev_config.json')
+VERSION_FILE = os.path.join(BASE_DIR, 'version.json')
 
 # 开发者模式默认配置
 DEFAULT_DEV_CONFIG = {
@@ -2338,6 +2339,29 @@ def get_meal_log_users():
         "success": True,
         "users": sorted(users),
         "total": len(users)
+    })
+
+
+@app.route('/api/version', methods=['GET'])
+def get_version():
+    """返回当前版本号，同时用作健康检查端点"""
+    try:
+        if os.path.exists(VERSION_FILE):
+            with open(VERSION_FILE, 'r', encoding='utf-8') as f:
+                info = json.load(f)
+            return jsonify({
+                "success": True,
+                "version": info.get("version", "unknown"),
+                "build_time": info.get("build_time", ""),
+                "changelog": info.get("changelog", "")
+            })
+    except Exception as e:
+        print(f"读取版本文件失败: {e}")
+    return jsonify({
+        "success": True,
+        "version": "unknown",
+        "build_time": "",
+        "changelog": ""
     })
 
 

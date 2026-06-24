@@ -2004,7 +2004,7 @@ function showMealLoginDialog() {
                         const data = await resp.json();
                         if (data.success) {
                             // 服务器验证通过，同步到本地
-                            localRegister(username, password); // 确保本地也有记录
+                            localRegister(username, password);
                             if (data.goal) localSaveGoal(username, data.goal);
                             setMealUser(username);
                             const autoCheck = overlay.querySelector('#autoLoginCheck');
@@ -2017,6 +2017,37 @@ function showMealLoginDialog() {
                             }
                             document.body.removeChild(overlay);
                             resolve(username);
+                        } else if (data.message && data.message.includes('不存在')) {
+                            // 服务器上不存在，尝试本地登录（兼容旧账号）
+                            const localResult = localLogin(username, password);
+                            if (localResult.success) {
+                                // 本地登录成功，自动注册到服务器
+                                try {
+                                    await fetch('/api/meal-user/register', {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({ username, password })
+                                    });
+                                } catch (regErr) {
+                                    console.warn('自动同步账号到服务器失败:', regErr.message);
+                                }
+                                setMealUser(username);
+                                const autoCheck = overlay.querySelector('#autoLoginCheck');
+                                if (autoCheck && autoCheck.checked) {
+                                    localStorage.setItem('meal_pwd', password);
+                                    localStorage.setItem('meal_auto_login', 'true');
+                                } else {
+                                    localStorage.removeItem('meal_pwd');
+                                    localStorage.removeItem('meal_auto_login');
+                                }
+                                document.body.removeChild(overlay);
+                                resolve(username);
+                            } else {
+                                errorEl.textContent = '昵称或密码错误';
+                                errorEl.style.display = '';
+                                btn.disabled = false;
+                                btn.textContent = '登录';
+                            }
                         } else {
                             errorEl.textContent = data.message || '登录失败';
                             errorEl.style.display = '';

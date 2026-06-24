@@ -2011,6 +2011,21 @@ body {
     box-shadow: 0 4px 12px rgba(243, 156, 18, 0.3);
 }
 
+.btn-dev {
+    background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+    color: white;
+    font-size: 0.85em;
+    padding: 6px 10px;
+    border-radius: 8px;
+    opacity: 0.7;
+    transition: opacity 0.2s;
+}
+
+.btn-dev:hover {
+    opacity: 1;
+    box-shadow: 0 4px 12px rgba(44, 62, 80, 0.3);
+}
+
 .btn-danger {
     background: linear-gradient(135deg, #eb3349 0%, #f45c43 100%);
     color: white;

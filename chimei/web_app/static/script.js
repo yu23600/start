@@ -118,7 +118,6 @@ document.addEventListener('DOMContentLoaded', function() {
     loadAllergies(); // 恢复过敏设置
     loadUserGoal(); // 加载用户目标
     updateTodayCheckinBar(); // 更新顶部打卡状态
-    updateAdminButton(); // 更新管理员按钮显示
 });
 
 function setupEventListeners() {
@@ -1758,10 +1757,6 @@ function getMealUser() {
 
 function setMealUser(name) {
     localStorage.setItem('meal_user', name.trim());
-    // 检查是否为管理员
-    const adminUsernames = ['nick3448450113']; // 预设管理员列表
-    currentUserRole = adminUsernames.includes(name.trim()) ? 'admin' : 'user';
-    updateAdminButton();
 }
 
 function clearMealAuth() {
@@ -2672,30 +2667,134 @@ function renderGallery(schools) {
 
 
 // ========== 管理员功能 ==========
-function isAdmin() {
-    return currentUserRole === 'admin';
+// ========== 开发者模式 ==========
+let devModeVerified = false; // 当前会话是否已验证
+
+function showDevModeDialog() {
+    if (devModeVerified) {
+        // 已验证，直接打开管理面板
+        showAdminPanel();
+        return;
+    }
+    // 显示密码输入弹窗
+    const overlay = document.createElement('div');
+    overlay.id = 'devPasswordOverlay';
+    overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:10000;display:flex;align-items:center;justify-content:center;';
+    overlay.innerHTML = `
+        <div style="background:white;border-radius:16px;padding:30px;max-width:360px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
+            <h3 style="text-align:center;color:#667eea;margin-bottom:20px;">🔧 开发者模式</h3>
+            <p style="text-align:center;color:#888;font-size:0.9em;margin-bottom:15px;">请输入开发者密码</p>
+            <input type="password" id="devPasswordInput" placeholder="密码" style="width:100%;padding:12px 16px;border:2px solid #e0e0e0;border-radius:10px;font-size:1em;outline:none;box-sizing:border-box;margin-bottom:15px;" onkeypress="if(event.key==='Enter')verifyDevPassword()">
+            <p id="devPasswordError" style="color:#ff4444;font-size:0.85em;text-align:center;display:none;margin-bottom:10px;"></p>
+            <div style="display:flex;gap:10px;">
+                <button onclick="verifyDevPassword()" style="flex:1;padding:12px;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);color:white;border:none;border-radius:10px;font-size:1em;cursor:pointer;font-weight:600;">验证</button>
+                <button onclick="closeDevDialog()" style="flex:1;padding:12px;background:#f0f0f0;color:#666;border:none;border-radius:10px;font-size:1em;cursor:pointer;">取消</button>
+            </div>
+            <p style="text-align:center;margin-top:15px;"><a href="javascript:void(0)" onclick="showChangePasswordDialog()" style="color:#999;font-size:0.8em;text-decoration:none;">修改密码</a></p>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+    setTimeout(() => document.getElementById('devPasswordInput').focus(), 100);
 }
 
-function updateAdminButton() {
-    const adminBtn = document.getElementById('adminBtn');
-    if (adminBtn) {
-        adminBtn.style.display = isAdmin() ? 'inline-block' : 'none';
+function closeDevDialog() {
+    const overlay = document.getElementById('devPasswordOverlay');
+    if (overlay) overlay.remove();
+}
+
+async function verifyDevPassword() {
+    const input = document.getElementById('devPasswordInput');
+    const errorEl = document.getElementById('devPasswordError');
+    const password = input.value.trim();
+    if (!password) {
+        errorEl.textContent = '请输入密码';
+        errorEl.style.display = 'block';
+        return;
+    }
+    try {
+        const resp = await fetch('/api/dev/verify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ password: password })
+        });
+        const data = await resp.json();
+        if (data.success) {
+            devModeVerified = true;
+            closeDevDialog();
+            showNotification('开发者模式已激活', 'success');
+            showAdminPanel();
+        } else {
+            errorEl.textContent = data.message || '密码错误';
+            errorEl.style.display = 'block';
+            input.value = '';
+            input.focus();
+        }
+    } catch(e) {
+        errorEl.textContent = '验证失败，请重试';
+        errorEl.style.display = 'block';
+    }
+}
+
+async function showChangePasswordDialog() {
+    // 先获取安全问题
+    let question = '创始人的外号';
+    try {
+        const resp = await fetch('/api/dev/question');
+        const data = await resp.json();
+        if (data.success) question = data.question;
+    } catch(e) {}
+    
+    closeDevDialog();
+    const overlay = document.createElement('div');
+    overlay.id = 'devPasswordOverlay';
+    overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:10000;display:flex;align-items:center;justify-content:center;';
+    overlay.innerHTML = `
+        <div style="background:white;border-radius:16px;padding:30px;max-width:380px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
+            <h3 style="text-align:center;color:#667eea;margin-bottom:20px;">🔑 修改开发者密码</h3>
+            <p style="color:#555;font-size:0.9em;margin-bottom:8px;">安全问题：${question}</p>
+            <input type="text" id="devAnswerInput" placeholder="回答问题" style="width:100%;padding:12px 16px;border:2px solid #e0e0e0;border-radius:10px;font-size:1em;outline:none;box-sizing:border-box;margin-bottom:12px;">
+            <input type="password" id="devNewPasswordInput" placeholder="新密码（至少4位）" style="width:100%;padding:12px 16px;border:2px solid #e0e0e0;border-radius:10px;font-size:1em;outline:none;box-sizing:border-box;margin-bottom:15px;">
+            <p id="devChangePwError" style="color:#ff4444;font-size:0.85em;text-align:center;display:none;margin-bottom:10px;"></p>
+            <div style="display:flex;gap:10px;">
+                <button onclick="submitChangePassword()" style="flex:1;padding:12px;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);color:white;border:none;border-radius:10px;font-size:1em;cursor:pointer;font-weight:600;">确认修改</button>
+                <button onclick="closeDevDialog()" style="flex:1;padding:12px;background:#f0f0f0;color:#666;border:none;border-radius:10px;font-size:1em;cursor:pointer;">返回</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+}
+
+async function submitChangePassword() {
+    const answer = document.getElementById('devAnswerInput').value.trim();
+    const newPw = document.getElementById('devNewPasswordInput').value.trim();
+    const errorEl = document.getElementById('devChangePwError');
+    if (!answer) { errorEl.textContent = '请回答安全问题'; errorEl.style.display = 'block'; return; }
+    if (!newPw || newPw.length < 4) { errorEl.textContent = '新密码至少4位'; errorEl.style.display = 'block'; return; }
+    try {
+        const resp = await fetch('/api/dev/change-password', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ answer: answer, new_password: newPw })
+        });
+        const data = await resp.json();
+        if (data.success) {
+            closeDevDialog();
+            showNotification('密码修改成功！', 'success');
+        } else {
+            errorEl.textContent = data.message || '修改失败';
+            errorEl.style.display = 'block';
+        }
+    } catch(e) {
+        errorEl.textContent = '请求失败';
+        errorEl.style.display = 'block';
     }
 }
 
 function showAdminPanel() {
-    if (!isAdmin()) {
-        showNotification('需要管理员权限', 'warning');
-        return;
-    }
-    
     const modal = document.getElementById('adminModal');
     modal.classList.add('show');
-    
     const user = getMealUser();
-    document.getElementById('adminUsernameDisplay').textContent = user ? user.username : '';
-    
-    // 加载第一个标签页内容
+    document.getElementById('adminUsernameDisplay').textContent = user ? user : '';
     switchAdminTab('menu');
 }
 

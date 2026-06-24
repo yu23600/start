@@ -100,6 +100,34 @@ DATA_FILE = os.path.join(BASE_DIR, 'cafeteria_data.json')
 USER_TAGS_FILE = os.path.join(BASE_DIR, 'user_dish_tags.json')
 MEAL_LOGS_FILE = os.path.join(BASE_DIR, 'meal_logs.json')
 MEAL_USERS_FILE = os.path.join(BASE_DIR, 'meal_users.json')
+DEV_CONFIG_FILE = os.path.join(BASE_DIR, 'dev_config.json')
+
+# 开发者模式默认配置
+DEFAULT_DEV_CONFIG = {
+    "password": "chimeifj",
+    "security_question": "创始人的外号",
+    "security_answer": "yb"
+}
+
+def load_dev_config():
+    """加载开发者模式配置"""
+    if os.path.exists(DEV_CONFIG_FILE):
+        try:
+            with open(DEV_CONFIG_FILE, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except:
+            pass
+    return dict(DEFAULT_DEV_CONFIG)
+
+def save_dev_config(config):
+    """保存开发者模式配置"""
+    try:
+        with open(DEV_CONFIG_FILE, 'w', encoding='utf-8') as f:
+            json.dump(config, f, ensure_ascii=False, indent=2)
+        return True
+    except Exception as e:
+        print(f"保存开发者配置失败: {e}")
+        return False
 
 # ========== 营养规则库 ==========
 NUTRITION_RULES = {
@@ -2180,6 +2208,45 @@ def internal_error(error):
         "success": False,
         "message": "服务器内部错误"
     }), 500
+
+
+# ========== 开发者模式 API ==========
+@app.route('/api/dev/verify', methods=['POST'])
+def dev_verify():
+    """验证开发者模式密码"""
+    data = request.json or {}
+    password = data.get('password', '').strip()
+    config = load_dev_config()
+    if password == config.get('password', ''):
+        return jsonify({"success": True, "message": "验证成功"})
+    return jsonify({"success": False, "message": "密码错误"}), 403
+
+
+@app.route('/api/dev/question', methods=['GET'])
+def dev_question():
+    """获取安全问题"""
+    config = load_dev_config()
+    return jsonify({
+        "success": True,
+        "question": config.get('security_question', '创始人的外号')
+    })
+
+
+@app.route('/api/dev/change-password', methods=['POST'])
+def dev_change_password():
+    """修改开发者模式密码（需回答安全问题）"""
+    data = request.json or {}
+    answer = data.get('answer', '').strip()
+    new_password = data.get('new_password', '').strip()
+    if not new_password or len(new_password) < 4:
+        return jsonify({"success": False, "message": "新密码至少4位"}), 400
+    config = load_dev_config()
+    if answer != config.get('security_answer', ''):
+        return jsonify({"success": False, "message": "安全问题答案错误"}), 403
+    config['password'] = new_password
+    if save_dev_config(config):
+        return jsonify({"success": True, "message": "密码修改成功"})
+    return jsonify({"success": False, "message": "保存失败"}), 500
 
 
 # ========== 启动入口 ==========

@@ -7,7 +7,7 @@ let selectedSchool = null; // 向导中选中的学校
 let userGoal = '';  // 用户目标: cutting / bulking / healthy / ''
 let wizardGoal = ''; // 向导中临时选中的目标
 let todayMeals = { breakfast: [], lunch: [], dinner: [] };
-let currentMealTab = 'lunch';
+let currentMealTab = 'breakfast';
 let schoolMenuItems = [];
 
 // ========== 初始化 ==========
@@ -1249,9 +1249,6 @@ async function finishTagging() {
 }
 
 // ========== 三餐打卡功能 ==========
-let currentMealTab = 'breakfast';
-let todayMeals = { breakfast: [], lunch: [], dinner: [] };
-let schoolMenuItems = [];
 
 // --- 用户身份管理 ---
 function getMealUser() {

@@ -23,6 +23,18 @@ import datetime
 import hashlib
 import secrets
 
+# ========== Supabase 云数据库 ==========
+SUPABASE_URL = os.environ.get('SUPABASE_URL', '')
+SUPABASE_ANON_KEY = os.environ.get('SUPABASE_ANON_KEY', '')
+supabase_client = None
+if SUPABASE_URL and SUPABASE_ANON_KEY:
+    try:
+        from supabase import create_client
+        supabase_client = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
+        print("✅ Supabase 连接成功")
+    except Exception as e:
+        print(f"️ Supabase 连接失败，将使用本地JSON存储: {e}")
+
 # ========== 基础路径配置 ==========
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -264,7 +276,16 @@ for _tags in TAG_TAXONOMY.values():
 
 
 def load_user_dish_tags():
-    """加载用户提交的菜品标签"""
+    """加载用户提交的菜品标签（Supabase 优先，降级到 JSON）"""
+    if supabase_client:
+        try:
+            resp = supabase_client.table('dish_tags').select('*').execute()
+            data = {}
+            for row in resp.data:
+                data[row['dish_name']] = row['tags'] if isinstance(row['tags'], list) else json.loads(row['tags']) if isinstance(row['tags'], str) else []
+            return data
+        except Exception as e:
+            print(f"Supabase 加载标签出错: {e}")
     if not os.path.exists(USER_TAGS_FILE):
         return {}
     try:
@@ -277,7 +298,15 @@ def load_user_dish_tags():
 
 
 def save_user_dish_tags(tags):
-    """保存用户提交的菜品标签"""
+    """保存用户提交的菜品标签（Supabase 优先，降级到 JSON）"""
+    if supabase_client:
+        try:
+            rows = [{"dish_name": dish, "tags": tag_list} for dish, tag_list in tags.items()]
+            if rows:
+                supabase_client.table('dish_tags').upsert(rows, on_conflict='dish_name').execute()
+            return True
+        except Exception as e:
+            print(f"Supabase 保存标签出错: {e}")
     try:
         with open(USER_TAGS_FILE, "w", encoding="utf-8") as f:
             json.dump(tags, f, ensure_ascii=False, indent=2)
@@ -288,7 +317,24 @@ def save_user_dish_tags(tags):
 
 
 def load_meal_logs():
-    """加载三餐打卡记录（支持旧格式自动迁移）"""
+    """加载三餐打卡记录（Supabase 优先，降级到 JSON）"""
+    if supabase_client:
+        try:
+            resp = supabase_client.table('meal_logs').select('*').execute()
+            data = {}
+            for row in resp.data:
+                username = row['username']
+                date = row['date']
+                meals = row['meals']
+                if isinstance(meals, str):
+                    meals = json.loads(meals)
+                if username not in data:
+                    data[username] = {}
+                data[username][date] = meals
+            return data
+        except Exception as e:
+            print(f"Supabase 加载打卡记录出错: {e}")
+    # 降级：JSON 文件
     if not os.path.exists(MEAL_LOGS_FILE):
         return {}
     try:
@@ -308,7 +354,24 @@ def load_meal_logs():
 
 
 def save_meal_logs(logs):
-    """保存三餐打卡记录"""
+    """保存三餐打卡记录（Supabase 优先，降级到 JSON）"""
+    if supabase_client:
+        try:
+            rows = []
+            for username, user_logs in logs.items():
+                if not isinstance(user_logs, dict):
+                    continue
+                for date, meals in user_logs.items():
+                    rows.append({
+                        "username": username,
+                        "date": date,
+                        "meals": meals
+                    })
+            if rows:
+                supabase_client.table('meal_logs').upsert(rows, on_conflict='username,date').execute()
+            return True
+        except Exception as e:
+            print(f"Supabase 保存打卡记录出错: {e}")
     try:
         with open(MEAL_LOGS_FILE, "w", encoding="utf-8") as f:
             json.dump(logs, f, ensure_ascii=False, indent=2)
@@ -320,7 +383,20 @@ def save_meal_logs(logs):
 
 # ========== 打卡用户管理 ==========
 def load_meal_users():
-    """加载打卡用户列表"""
+    """加载打卡用户列表（Supabase 优先，降级到 JSON）"""
+    if supabase_client:
+        try:
+            resp = supabase_client.table('meal_users').select('*').execute()
+            data = {}
+            for row in resp.data:
+                data[row['username']] = {
+                    "password_hash": row['password_hash'],
+                    "salt": row['salt'],
+                    "created_at": row['created_at']
+                }
+            return data
+        except Exception as e:
+            print(f"Supabase 加载用户出错: {e}")
     if not os.path.exists(MEAL_USERS_FILE):
         return {}
     try:
@@ -333,7 +409,22 @@ def load_meal_users():
 
 
 def save_meal_users(users):
-    """保存打卡用户列表"""
+    """保存打卡用户列表（Supabase 优先，降级到 JSON）"""
+    if supabase_client:
+        try:
+            rows = []
+            for username, info in users.items():
+                rows.append({
+                    "username": username,
+                    "password_hash": info.get('password_hash', ''),
+                    "salt": info.get('salt', ''),
+                    "created_at": info.get('created_at', datetime.datetime.now().isoformat())
+                })
+            if rows:
+                supabase_client.table('meal_users').upsert(rows, on_conflict='username').execute()
+            return True
+        except Exception as e:
+            print(f"Supabase 保存用户出错: {e}")
     try:
         with open(MEAL_USERS_FILE, "w", encoding="utf-8") as f:
             json.dump(users, f, ensure_ascii=False, indent=2)
@@ -540,7 +631,20 @@ CURATED_DATABASE = {
 
 # ========== 本地数据管理 ==========
 def load_all_data():
-    """加载所有学校数据"""
+    """加载所有学校数据（Supabase 优先，降级到 JSON）"""
+    if supabase_client:
+        try:
+            resp = supabase_client.table('school_menus').select('*').execute()
+            data = {}
+            for row in resp.data:
+                data[row['school_name']] = {
+                    "menu": row['menu'],
+                    "last_modified": row['last_modified']
+                }
+            return data
+        except Exception as e:
+            print(f"Supabase 加载数据出错: {e}")
+    # 降级：JSON 文件
     if not os.path.exists(DATA_FILE):
         return {}
     try:
@@ -561,7 +665,24 @@ def load_all_data():
 
 
 def save_all_data(data):
-    """保存所有学校数据"""
+    """保存所有学校数据（Supabase 优先，降级到 JSON）"""
+    if supabase_client:
+        try:
+            rows = []
+            for school_name, school_data in data.items():
+                menu = school_data.get("menu", "") if isinstance(school_data, dict) else str(school_data)
+                last_modified = school_data.get("last_modified", time.strftime("%Y-%m-%d %H:%M")) if isinstance(school_data, dict) else time.strftime("%Y-%m-%d %H:%M")
+                rows.append({
+                    "school_name": school_name,
+                    "menu": menu,
+                    "last_modified": last_modified
+                })
+            if rows:
+                supabase_client.table('school_menus').upsert(rows, on_conflict='school_name').execute()
+            return True
+        except Exception as e:
+            print(f"Supabase 保存数据出错: {e}")
+    # 降级：JSON 文件
     try:
         with open(DATA_FILE, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)

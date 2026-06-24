@@ -1,4 +1,4 @@
-# v11 - 全国高校食堂图鉴
+# v12 - 迁移到 Supabase 云数据库
 services:
   - type: web
     name: cafeteria-recommender

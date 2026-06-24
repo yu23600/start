@@ -1,4 +1,4 @@
-# v12 - 迁移到 Supabase 云数据库
+# v13 - 添加 Supabase 环境变量
 services:
   - type: web
     name: cafeteria-recommender
@@ -9,3 +9,7 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.0
+      - key: SUPABASE_URL
+        value: https://mhbazgjiirdgcikuqlmh.supabase.co
+      - key: SUPABASE_ANON_KEY
+        value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1oYmF6Z2ppaXJkZ2Npa3VxbG1oIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIyMzE1NjMsImV4cCI6MjA5NzgwNzU2M30.efeVXZSPzGnJItVpfA-_qC9mJbxFDT-6eEvs1ETSB0k

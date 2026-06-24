@@ -44,7 +44,6 @@
             </div>
             <div class="checkin-bar-right">
                 <button onclick="showMealCheckin()" class="btn btn-warning btn-small">📝 打卡</button>
-                <button onclick="showDevModeDialog()" class="btn btn-dev btn-small" id="devModeBtn" title="开发者模式">🔧</button>
             </div>
         </div>
 
@@ -153,6 +152,7 @@
                 <button onclick="exportData()" class="toolbar-btn"> 导出</button>
                 <button onclick="document.getElementById('importFileInput').click()" class="toolbar-btn">📥 导入</button>
                 <button onclick="showGallery()" class="toolbar-btn">🗺️ 图鉴</button>
+                <button onclick="showDevModeDialog()" class="toolbar-btn toolbar-btn-dev" title="开发者模式">🔧 开发者</button>
                 <input type="file" id="importFileInput" accept=".json" style="display:none;" onchange="importData(event)">
             </div>
         </div>

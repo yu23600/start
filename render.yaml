@@ -1,4 +1,4 @@
-# v13 - 添加 Supabase 环境变量
+# v14 - 排行榜功能 + 90所福建高校菜品数据库
 services:
   - type: web
     name: cafeteria-recommender

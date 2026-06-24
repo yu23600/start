@@ -15,6 +15,7 @@ document.addEventListener('DOMContentLoaded', function() {
     checkFirstTimeUse(); // 检查是否首次使用
     loadAllergies(); // 恢复过敏设置
     loadUserGoal(); // 加载用户目标
+    updateTodayCheckinBar(); // 更新顶部打卡状态
 });
 
 function setupEventListeners() {
@@ -413,13 +414,18 @@ async function smartRecommend() {
 }
 
 // ========== 目标管理 ==========
-function loadUserGoal() {
-    const saved = localStorage.getItem('user_goal');
-    if (saved) {
-        userGoal = saved;
-        updateGoalStatusBar();
-        updateGoalCards();
+async function loadUserGoal() {
+    const user = getMealUser();
+    if (!user) return;
+    const goal = localGetGoal(user);
+    if (goal) {
+        userGoal = goal;
+        localStorage.setItem('user_goal', goal);
+    } else {
+        userGoal = localStorage.getItem('user_goal') || '';
     }
+    updateGoalStatusBar();
+    updateGoalCards();
 }
 
 function updateGoalStatusBar() {
@@ -440,6 +446,14 @@ function updateGoalStatusBar() {
 }
 
 function updateGoalCards() {
+    const section = document.getElementById('goalCardsSection');
+    if (!section) return;
+    if (userGoal) {
+        section.style.display = 'none'; // 已选目标，隐藏卡片
+    } else {
+        section.style.display = 'block'; // 未选目标，显示卡片
+    }
+    // Still update individual card highlights
     document.querySelectorAll('#goalCards .goal-card').forEach(card => {
         card.classList.remove('selected');
         if (card.dataset.goal === userGoal) {
@@ -461,24 +475,16 @@ function selectGoalFromCards(goal) {
 }
 
 async function saveGoal(goal) {
+    const g = wizardGoal || userGoal || goal;
     const user = getMealUser();
-    if (!user) return;
-    try {
-        const resp = await fetch('/api/meal-user/goal', {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username: user, goal: goal })
-        });
-        const data = await resp.json();
-        if (data.success) {
-            userGoal = goal;
-            localStorage.setItem('user_goal', goal);
-            updateGoalStatusBar();
-            updateGoalCards();
-        }
-    } catch (e) {
-        console.error('保存目标失败:', e);
+    if (user) {
+        localSaveGoal(user, g);
     }
+    userGoal = g;
+    localStorage.setItem('user_goal', g);
+    updateGoalStatusBar();
+    updateGoalCards();
+    document.getElementById('goalWizardModal').classList.remove('show');
 }
 
 function showGoalSwitcher() {
@@ -1263,6 +1269,88 @@ async function finishTagging() {
 
 // ========== 三餐打卡功能 ==========
 
+// --- localStorage 数据层（用户数据全部存在浏览器本地，不依赖服务器） ---
+
+function _loadLocalUsers() {
+    try { return JSON.parse(localStorage.getItem('chimei_users') || '{}'); } catch { return {}; }
+}
+function _saveLocalUsers(users) {
+    localStorage.setItem('chimei_users', JSON.stringify(users));
+}
+function _loadLocalLogs() {
+    try { return JSON.parse(localStorage.getItem('chimei_meal_logs') || '{}'); } catch { return {}; }
+}
+function _saveLocalLogs(logs) {
+    localStorage.setItem('chimei_meal_logs', JSON.stringify(logs));
+}
+
+// 注册（本地）
+function localRegister(username, password) {
+    const users = _loadLocalUsers();
+    if (users[username]) return { success: false, message: '该昵称已存在' };
+    users[username] = { password: password, created_at: new Date().toISOString() };
+    _saveLocalUsers(users);
+    return { success: true };
+}
+
+// 登录验证（本地）
+function localLogin(username, password) {
+    const users = _loadLocalUsers();
+    const user = users[username];
+    if (!user) return { success: false, message: '昵称不存在，请先注册' };
+    if (user.password !== password) return { success: false, message: '密码错误' };
+    return { success: true, goal: user.goal || '' };
+}
+
+// 保存打卡记录（本地）
+function localSaveMealLog(username, date, meal, dishes) {
+    const logs = _loadLocalLogs();
+    if (!logs[username]) logs[username] = {};
+    if (!logs[username][date]) logs[username][date] = { breakfast: [], lunch: [], dinner: [] };
+    logs[username][date][meal] = dishes;
+    _saveLocalLogs(logs);
+}
+
+// 获取某天某用户的打卡记录
+function localGetMealLog(username, date) {
+    const logs = _loadLocalLogs();
+    if (!logs[username] || !logs[username][date]) return { breakfast: [], lunch: [], dinner: [] };
+    return logs[username][date];
+}
+
+// 获取用户目标（本地）
+function localGetGoal(username) {
+    const users = _loadLocalUsers();
+    return (users[username] && users[username].goal) || '';
+}
+
+// 保存用户目标（本地）
+function localSaveGoal(username, goal) {
+    const users = _loadLocalUsers();
+    if (users[username]) {
+        users[username].goal = goal;
+        _saveLocalUsers(users);
+    }
+}
+
+// 获取过去7天的打卡数据（用于周报）
+function localGetWeeklyData(username) {
+    const logs = _loadLocalLogs();
+    const userLogs = logs[username] || {};
+    const today = new Date();
+    const result = [];
+    for (let i = 6; i >= 0; i--) {
+        const d = new Date(today);
+        d.setDate(d.getDate() - i);
+        const dateStr = d.toISOString().split('T')[0];
+        result.push({
+            date: dateStr,
+            data: userLogs[dateStr] || { breakfast: [], lunch: [], dinner: [] }
+        });
+    }
+    return result;
+}
+
 // --- 用户身份管理 ---
 function getMealUser() {
     return localStorage.getItem('meal_user') || '';
@@ -1352,59 +1440,34 @@ function showMealLoginDialog() {
                         btn.textContent = '注册';
                         return;
                     }
-                    try {
-                        const resp = await fetch('/api/meal-user/register', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ username, password })
-                        });
-                        const data = await resp.json();
-                        if (data.success) {
-                            setMealUser(username);
-                            // 注册后不自动存密码到 localStorage（需手动登录一次）
-                            document.body.removeChild(overlay);
-                            resolve(username);
-                        } else {
-                            errorEl.textContent = data.message || '注册失败';
-                            errorEl.style.display = '';
-                            btn.disabled = false;
-                            btn.textContent = '注册';
-                        }
-                    } catch (e) {
-                        errorEl.textContent = '网络错误';
+                    const result = localRegister(username, password);
+                    if (result.success) {
+                        setMealUser(username);
+                        document.body.removeChild(overlay);
+                        resolve(username);
+                    } else {
+                        errorEl.textContent = result.message;
                         errorEl.style.display = '';
                         btn.disabled = false;
                         btn.textContent = '注册';
                     }
                 } else {
                     // 登录
-                    try {
-                        const resp = await fetch('/api/meal-user/login', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ username, password })
-                        });
-                        const data = await resp.json();
-                        if (data.success) {
-                            setMealUser(username);
-                            const autoCheck = overlay.querySelector('#autoLoginCheck');
-                            if (autoCheck && autoCheck.checked) {
-                                localStorage.setItem('meal_pwd', password);
-                                localStorage.setItem('meal_auto_login', 'true');
-                            } else {
-                                localStorage.removeItem('meal_pwd');
-                                localStorage.removeItem('meal_auto_login');
-                            }
-                            document.body.removeChild(overlay);
-                            resolve(username);
+                    const result = localLogin(username, password);
+                    if (result.success) {
+                        setMealUser(username);
+                        const autoCheck = overlay.querySelector('#autoLoginCheck');
+                        if (autoCheck && autoCheck.checked) {
+                            localStorage.setItem('meal_pwd', password);
+                            localStorage.setItem('meal_auto_login', 'true');
                         } else {
-                            errorEl.textContent = data.message || '登录失败';
-                            errorEl.style.display = '';
-                            btn.disabled = false;
-                            btn.textContent = '登录';
+                            localStorage.removeItem('meal_pwd');
+                            localStorage.removeItem('meal_auto_login');
                         }
-                    } catch (e) {
-                        errorEl.textContent = '网络错误';
+                        document.body.removeChild(overlay);
+                        resolve(username);
+                    } else {
+                        errorEl.textContent = result.message;
                         errorEl.style.display = '';
                         btn.disabled = false;
                         btn.textContent = '登录';
@@ -1443,19 +1506,8 @@ async function tryAutoLogin() {
     const user = getMealUser();
     const pwd = localStorage.getItem('meal_pwd');
     if (!user || !pwd) return null;
-
-    try {
-        const resp = await fetch('/api/meal-user/login', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username: user, password: pwd })
-        });
-        const data = await resp.json();
-        if (data.success) return user;
-    } catch (e) {
-        console.error('自动登录失败:', e);
-    }
-    // 自动登录失败，清除凭据
+    const result = localLogin(user, pwd);
+    if (result.success) return user;
     localStorage.removeItem('meal_pwd');
     localStorage.removeItem('meal_auto_login');
     return null;
@@ -1483,31 +1535,16 @@ async function startupMealLogin() {
 }
 
 async function checkAndShowGoalWizard() {
-    // 先检查本地是否有目标
-    const localGoal = localStorage.getItem('user_goal');
-    if (localGoal) {
-        userGoal = localGoal;
-        updateGoalStatusBar();
-        updateGoalCards();
-        return;
-    }
-    // 从服务器获取目标
     const user = getMealUser();
     if (!user) return;
-    try {
-        const resp = await fetch(`/api/meal-user/goal?username=${encodeURIComponent(user)}`);
-        const data = await resp.json();
-        if (data.success && data.goal) {
-            userGoal = data.goal;
-            localStorage.setItem('user_goal', data.goal);
-            updateGoalStatusBar();
-            updateGoalCards();
-        } else {
-            // 没有目标，弹出目标选择向导
-            showGoalSwitcher();
-        }
-    } catch (e) {
-        console.error('获取目标失败:', e);
+    const goal = localGetGoal(user);
+    if (goal) {
+        userGoal = goal;
+        localStorage.setItem('user_goal', goal);
+        updateGoalStatusBar();
+        updateGoalCards();
+    } else {
+        showGoalSwitcher();
     }
 }
 
@@ -1548,16 +1585,8 @@ async function showMealCheckin() {
     const dateStr = today.toISOString().split('T')[0];
     document.getElementById('checkinDate').textContent = `📅 ${dateStr}`;
 
-    // 加载今日打卡数据（携带用户名）
-    try {
-        const resp = await fetch(`/api/meal-log/today?username=${encodeURIComponent(user)}`);
-        const data = await resp.json();
-        if (data.success) {
-            todayMeals = data.meals || { breakfast: [], lunch: [], dinner: [] };
-        }
-    } catch (e) {
-        console.error('加载打卡数据失败:', e);
-    }
+    // 加载今日打卡数据（从本地存储）
+    todayMeals = localGetMealLog(user, dateStr);
 
     // 加载学校菜单
     try {
@@ -1669,6 +1698,48 @@ function updateCheckinStatus() {
     bar.innerHTML = html;
 }
 
+function updateTodayCheckinBar() {
+    const user = getMealUser();
+    if (!user) return;
+    const today = new Date();
+    const dateStr = today.toISOString().split('T')[0];
+    const data = localGetMealLog(user, dateStr);
+
+    // Update date display
+    const dateDisplay = document.getElementById('checkinDateDisplay');
+    if (dateDisplay) {
+        const month = today.getMonth() + 1;
+        const day = today.getDate();
+        dateDisplay.textContent = `${month}月${day}日`;
+    }
+
+    // Update dots
+    const meals = ['breakfast', 'lunch', 'dinner'];
+    const dotIds = ['dotBreakfast', 'dotLunch', 'dotDinner'];
+    let checkedCount = 0;
+    for (let i = 0; i < meals.length; i++) {
+        const dot = document.getElementById(dotIds[i]);
+        if (dot) {
+            const hasData = data[meals[i]] && data[meals[i]].length > 0;
+            if (hasData) {
+                dot.classList.add('active');
+                checkedCount++;
+            } else {
+                dot.classList.remove('active');
+            }
+        }
+    }
+
+    // Update summary
+    const summary = document.getElementById('checkinSummary');
+    if (summary) {
+        if (checkedCount === 0) summary.textContent = '今日还未打卡';
+        else if (checkedCount === 1) summary.textContent = '已打卡 1 餐';
+        else if (checkedCount === 2) summary.textContent = '已打卡 2 餐';
+        else summary.textContent = '今日三餐已打卡 ✅';
+    }
+}
+
 async function saveCurrentMeal() {
     const meal = currentMealTab;
     const dishes = todayMeals[meal] || [];
@@ -1681,27 +1752,13 @@ async function saveCurrentMeal() {
         return;
     }
 
-    try {
-        const resp = await fetch('/api/meal-log/save', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username: user, date: today, meal: meal, dishes: dishes })
-        });
-        const data = await resp.json();
-        if (data.success) {
-            showNotification(`${mealNames[meal]}已保存 ${dishes.length} 道菜品`, 'success');
-        } else {
-            showNotification(data.message || '保存失败', 'error');
-        }
-    } catch (e) {
-        console.error('保存打卡失败:', e);
-        showNotification('保存失败', 'error');
-    }
+    localSaveMealLog(user, today, meal, dishes);
+    showNotification(`${mealNames[meal]}已保存 ${dishes.length} 道菜品`, 'success');
+    updateTodayCheckinBar();
 }
 
 // ========== 周饮食报告 ==========
 async function showWeeklyReport() {
-    // 确保报告弹窗可见
     document.getElementById('weeklyReportModal').classList.add('show');
     const content = document.getElementById('reportContent');
     content.innerHTML = '<p style="text-align:center;color:#999;padding:30px;">加载中...</p>';
@@ -1712,18 +1769,78 @@ async function showWeeklyReport() {
         return;
     }
 
-    try {
-        const resp = await fetch(`/api/meal-log/weekly-report?username=${encodeURIComponent(user)}`);
-        const data = await resp.json();
-        if (data.success) {
-            renderReport(data);
-        } else {
-            content.innerHTML = '<p style="color:#e74c3c;text-align:center;">加载报告失败</p>';
+    const weeklyData = localGetWeeklyData(user);
+    const goal = localGetGoal(user);
+    const goalNames = { cutting: '减脂期', bulking: '增肌期', healthy: '保持健康' };
+    const goalName = goalNames[goal] || '';
+
+    // Compute stats
+    let days_checked_in = 0, total_meals = 0, total_dishes = 0;
+    let dish_counter = {}, category_counter = {};
+    let daily_summary = [];
+    let meal_completion = { breakfast: 0, lunch: 0, dinner: 0 };
+    let daily_goal_metric = [];
+
+    for (const day of weeklyData) {
+        let day_meals = 0, day_dish_count = 0, day_protein = 0, day_unhealthy = 0;
+        for (const mealType of ["breakfast", "lunch", "dinner"]) {
+            const dishes = day.data[mealType] || [];
+            if (dishes.length > 0) {
+                day_meals++;
+                meal_completion[mealType]++;
+                for (const dish of dishes) {
+                    day_dish_count++;
+                    total_dishes++;
+                    dish_counter[dish] = (dish_counter[dish] || 0) + 1;
+                    // Keyword-based classification
+                    if (["鸡胸","牛肉","鱼","鸡蛋","豆腐","虾"].some(kw => dish.includes(kw))) day_protein++;
+                    if (["炸鸡","红烧肉","蛋糕","薯条"].some(kw => dish.includes(kw))) day_unhealthy++;
+                }
+            }
         }
-    } catch (e) {
-        console.error('加载报告失败:', e);
-        content.innerHTML = '<p style="color:#e74c3c;text-align:center;">加载报告失败</p>';
+        if (day_meals > 0) days_checked_in++;
+        total_meals += day_meals;
+
+        const metricVal = goal === 'cutting' ? day_unhealthy : goal === 'bulking' ? day_protein : day_meals;
+        daily_goal_metric.push(metricVal);
+
+        const d = new Date(day.date);
+        daily_summary.push({
+            date: day.date,
+            weekday: ["一","二","三","四","五","六","日"][d.getDay() === 0 ? 6 : d.getDay() - 1],
+            meals: day_meals,
+            dish_count: day_dish_count
+        });
     }
+
+    // Consecutive days
+    let consecutive_days = 0;
+    for (let i = weeklyData.length - 1; i >= 0; i--) {
+        const day = weeklyData[i];
+        const hasMeals = ["breakfast","lunch","dinner"].some(m => (day.data[m] || []).length > 0);
+        if (hasMeals) consecutive_days++;
+        else break;
+    }
+
+    const sorted_dishes = Object.entries(dish_counter).sort((a,b) => b[1]-a[1]).slice(0,5);
+    const top_dishes = sorted_dishes.map(([name,count]) => ({name, count}));
+
+    // Insights
+    let insights = [];
+    if (consecutive_days >= 3) insights.push(`你已经连续打卡 ${consecutive_days} 天，继续保持！`);
+    if (top_dishes.length && top_dishes[0].count >= 3) insights.push(`「${top_dishes[0].name}」是你本周最爱，吃了 ${top_dishes[0].count} 次`);
+    if (!insights.length) {
+        if (days_checked_in === 0) insights.push('本周还没有打卡记录，从今天开始记录吧！');
+        else if (days_checked_in < 3) insights.push(`本周打卡 ${days_checked_in} 天，坚持每天记录会更有参考价值`);
+    }
+
+    renderReport({
+        days_checked_in, total_meals, total_dishes, top_dishes,
+        category_distribution: category_counter,
+        daily_summary, daily_goal_metric, meal_completion,
+        consecutive_days, insights: insights.slice(0,3),
+        goal: goalName
+    });
 }
 
 function closeWeeklyReport() {
@@ -1919,28 +2036,72 @@ function renderGoalTrendChart(data) {
 
 // ========== 每日简报 ==========
 async function showDailyBriefing() {
+    document.getElementById('briefingModal').classList.add('show');
+    const content = document.getElementById('briefingContent');
     const user = getMealUser();
     if (!user) {
-        showNotification('请先登录', 'warning');
+        content.innerHTML = '<p style="color:#e74c3c;text-align:center;">请先设置昵称</p>';
         return;
     }
 
-    document.getElementById('briefingModal').classList.add('show');
-    const content = document.getElementById('briefingContent');
-    content.innerHTML = '<p style="text-align:center;color:#999;padding:30px;">加载中...</p>';
+    const today = new Date().toISOString().split('T')[0];
+    const todayData = localGetMealLog(user, today);
+    const allDishes = [...(todayData.breakfast||[]), ...(todayData.lunch||[]), ...(todayData.dinner||[])];
+    const mealCounts = { breakfast: (todayData.breakfast||[]).length, lunch: (todayData.lunch||[]).length, dinner: (todayData.dinner||[]).length };
+    const totalDishes = allDishes.length;
+    const mealsLogged = Object.values(mealCounts).filter(v => v > 0).length;
+    const goalNames = { cutting: '减脂期', bulking: '增肌期', healthy: '保持健康' };
+    const goal = localGetGoal(user);
+    const goalName = goalNames[goal] || '';
 
-    try {
-        const resp = await fetch(`/api/meal-log/daily-briefing?username=${encodeURIComponent(user)}`);
-        const data = await resp.json();
-        if (data.success) {
-            renderBriefing(data);
-        } else {
-            content.innerHTML = '<p style="color:#e74c3c;text-align:center;">加载简报失败</p>';
-        }
-    } catch (e) {
-        console.error('加载简报失败:', e);
-        content.innerHTML = '<p style="color:#e74c3c;text-align:center;">加载简报失败</p>';
+    if (totalDishes === 0) {
+        content.innerHTML = `<div style="text-align:center;padding:30px;color:#999;">
+            <p>今天还没有打卡记录</p><p style="font-size:0.9em;margin-top:8px;">快去记录今天吃了什么吧！</p></div>`;
+        return;
     }
+
+    let proteinCount = 0, unhealthyCount = 0, vegetableCount = 0;
+    for (const dish of allDishes) {
+        if (["鸡胸","牛肉","鱼","鸡蛋","豆腐","虾"].some(kw => dish.includes(kw))) proteinCount++;
+        if (["炸鸡","红烧肉","蛋糕","薯条"].some(kw => dish.includes(kw))) unhealthyCount++;
+        if (["西兰花","青菜","黄瓜","番茄","蔬菜","沙拉"].some(kw => dish.includes(kw))) vegetableCount++;
+    }
+
+    let score = 70, tip = '', details = [];
+    if (goal === 'cutting') {
+        if (unhealthyCount > 0) { score -= unhealthyCount * 10; tip = `今天有 ${unhealthyCount} 道高油菜品，建议明天换成清蒸或凉拌`; }
+        if (vegetableCount > 2) { score += 10; details.push(`蔬菜摄入 ${vegetableCount} 次，继续保持`); }
+        if (proteinCount > 0) { score += 5; details.push(`蛋白质摄入 ${proteinCount} 次`); }
+        if (!tip) tip = unhealthyCount === 0 ? '今天饮食很清淡，减脂节奏把握得不错！' : '注意控制油脂摄入';
+    } else if (goal === 'bulking') {
+        if (proteinCount >= 3) { score += 15; tip = `蛋白质摄入 ${proteinCount} 次，增肌营养跟上了！`; }
+        else if (proteinCount >= 1) { score += 5; tip = `蛋白质摄入 ${proteinCount} 次，还可以多吃点鸡蛋和鸡胸肉`; }
+        else { score -= 10; tip = '今天蛋白质摄入不足，建议加一份鸡蛋或豆腐'; }
+    } else {
+        if (mealsLogged >= 3) { score += 10; details.push('三餐都有记录，饮食规律'); }
+        if (vegetableCount > 0 && proteinCount > 0) { score += 10; tip = '荤素搭配不错，继续保持！'; }
+        else if (totalDishes > 0) tip = '记得荤素搭配，每餐都有蔬菜和蛋白质最理想';
+    }
+    score = Math.max(0, Math.min(100, score));
+
+    let html = `<div style="text-align:center;padding:20px;background:linear-gradient(135deg,#667eea22,#764ba222);border-radius:12px;margin-bottom:15px;">
+        <div style="font-size:2.5em;font-weight:bold;color:#667eea;">${score}</div>
+        <div style="color:#888;font-size:0.9em;">今日饮食评分</div>
+        ${goalName ? `<div style="margin-top:5px;color:#667eea;font-size:0.85em;">🎯 ${goalName}</div>` : ''}
+    </div>
+    <p style="text-align:center;font-size:1em;color:#444;margin-bottom:15px;padding:0 10px;">${tip}</p>
+    <div style="display:flex;gap:10px;justify-content:center;margin-bottom:15px;flex-wrap:wrap;">
+        <div style="text-align:center;padding:8px 15px;background:#f0f7ff;border-radius:8px;"><div style="font-size:1.3em;font-weight:bold;color:#667eea;">${totalDishes}</div><div style="font-size:0.75em;color:#888;">总菜品</div></div>
+        <div style="text-align:center;padding:8px 15px;background:#f0fff4;border-radius:8px;"><div style="font-size:1.3em;font-weight:bold;color:#27ae60;">${proteinCount}</div><div style="font-size:0.75em;color:#888;">高蛋白</div></div>
+        <div style="text-align:center;padding:8px 15px;background:#fff9e6;border-radius:8px;"><div style="font-size:1.3em;font-weight:bold;color:#f39c12;">${unhealthyCount}</div><div style="font-size:0.75em;color:#888;">高油菜品</div></div>
+        <div style="text-align:center;padding:8px 15px;background:#f0fff0;border-radius:8px;"><div style="font-size:1.3em;font-weight:bold;color:#2ecc71;">${vegetableCount}</div><div style="font-size:0.75em;color:#888;">蔬菜</div></div>
+    </div>`;
+    if (details.length) {
+        html += '<div style="padding:10px 15px;background:#f8f9fa;border-radius:8px;">';
+        html += details.map(d => `<p style="margin:4px 0;color:#666;font-size:0.9em;">• ${d}</p>`).join('');
+        html += '</div>';
+    }
+    content.innerHTML = html;
 }
 
 function closeBriefing() {

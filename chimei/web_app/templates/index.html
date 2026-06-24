@@ -31,6 +31,20 @@
         <!-- 隐藏的菜单数据存储 -->
         <textarea id="menuText" style="display:none;"></textarea>
 
+        <!-- 今日打卡状态 -->
+        <div class="today-checkin-bar" id="todayCheckinBar">
+            <div class="checkin-bar-left" onclick="showMealCheckin()">
+                <span class="checkin-date" id="checkinDateDisplay"></span>
+                <div class="checkin-dots">
+                    <span class="checkin-dot" id="dotBreakfast" title="早餐">🌅</span>
+                    <span class="checkin-dot" id="dotLunch" title="午餐">☀️</span>
+                    <span class="checkin-dot" id="dotDinner" title="晚餐">🌙</span>
+                </div>
+                <span class="checkin-summary" id="checkinSummary">今日还未打卡</span>
+            </div>
+            <button onclick="showMealCheckin()" class="btn btn-warning btn-small">📝 打卡</button>
+        </div>
+
         <!-- 目标状态条 -->
         <div class="goal-status-bar" id="goalStatusBar" onclick="showGoalSwitcher()">
             <span id="goalStatusIcon" class="goal-status-icon">🎯</span>
@@ -38,9 +52,9 @@
             <span class="goal-status-arrow">▶</span>
         </div>
 
-        <!-- 目标选择卡片 -->
-        <div class="section-card">
-            <h3 class="section-title">我的饮食目标</h3>
+        <!-- 目标选择卡片（未选目标时显示） -->
+        <div class="section-card" id="goalCardsSection">
+            <h3 class="section-title">选择你的饮食目标</h3>
             <div class="goal-cards" id="goalCards">
                 <div class="goal-card" data-goal="cutting" onclick="selectGoalFromCards('cutting')">
                     <div class="goal-icon">🔥</div>

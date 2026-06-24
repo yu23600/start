@@ -3271,6 +3271,18 @@ def dev_change_password():
     return jsonify({"success": False, "message": "保存失败"}), 500
 
 
+# ========== 诊断测试 ==========
+@app.route('/api/test/leaderboard-check')
+def leaderboard_check():
+    """诊断：确认排行榜代码是否已部署"""
+    return jsonify({
+        "success": True,
+        "message": "排行榜代码已部署",
+        "leaderboard_file": LEADERBOARD_FILE,
+        "file_exists": os.path.exists(LEADERBOARD_FILE)
+    })
+
+
 # ========== 排行榜 API ==========
 def load_leaderboard_scores():
     """加载排行榜分数数据"""

@@ -102,6 +102,8 @@ MEAL_LOGS_FILE = os.path.join(BASE_DIR, 'meal_logs.json')
 MEAL_USERS_FILE = os.path.join(BASE_DIR, 'meal_users.json')
 DEV_CONFIG_FILE = os.path.join(BASE_DIR, 'dev_config.json')
 VERSION_FILE = os.path.join(BASE_DIR, 'version.json')
+LEADERBOARD_FILE = os.path.join(BASE_DIR, 'leaderboard_scores.json')
+LEADERBOARD_PRIVACY_FILE = os.path.join(BASE_DIR, 'leaderboard_privacy.json')
 
 # 开发者模式默认配置
 DEFAULT_DEV_CONFIG = {
@@ -2450,6 +2452,234 @@ def dev_change_password():
     if save_dev_config(config):
         return jsonify({"success": True, "message": "密码修改成功"})
     return jsonify({"success": False, "message": "保存失败"}), 500
+
+
+# ========== 排行榜 API ==========
+def load_leaderboard_scores():
+    """加载排行榜分数数据"""
+    if os.path.exists(LEADERBOARD_FILE):
+        try:
+            with open(LEADERBOARD_FILE, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except:
+            pass
+    return {}
+
+def save_leaderboard_scores(data):
+    """保存排行榜分数数据"""
+    try:
+        with open(LEADERBOARD_FILE, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        return True
+    except Exception as e:
+        print(f"保存排行榜数据失败: {e}")
+        return False
+
+def load_leaderboard_privacy():
+    """加载排行榜隐私设置 {username: opted_in}"""
+    if os.path.exists(LEADERBOARD_PRIVACY_FILE):
+        try:
+            with open(LEADERBOARD_PRIVACY_FILE, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except:
+            pass
+    return {}
+
+def save_leaderboard_privacy(data):
+    """保存排行榜隐私设置"""
+    try:
+        with open(LEADERBOARD_PRIVACY_FILE, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        return True
+    except Exception as e:
+        print(f"保存隐私设置失败: {e}")
+        return False
+
+def is_opted_in(username):
+    """检查用户是否参与排行榜（默认参与）"""
+    privacy = load_leaderboard_privacy()
+    return privacy.get(username, True)
+
+@app.route('/api/leaderboard/submit', methods=['POST'])
+def submit_leaderboard_score():
+    """提交每日分数到排行榜"""
+    data = request.json or {}
+    username = data.get('username', '').strip()
+    date = data.get('date', '').strip()
+    score = data.get('score', 0)
+    school = data.get('school', '').strip()
+    meals_count = data.get('meals_count', 0)
+
+    if not username or not date:
+        return jsonify({"success": False, "message": "参数不完整"}), 400
+
+    scores = load_leaderboard_scores()
+    if username not in scores:
+        scores[username] = {}
+    scores[username][date] = {
+        "score": score,
+        "school": school,
+        "meals_count": meals_count,
+        "submitted_at": datetime.datetime.now().isoformat()
+    }
+    save_leaderboard_scores(scores)
+    return jsonify({"success": True})
+
+@app.route('/api/leaderboard', methods=['GET'])
+def get_leaderboard():
+    """获取排行榜（支持日/周/月筛选和学校筛选）"""
+    period = request.args.get('period', 'daily')  # daily, weekly, monthly
+    school = request.args.get('school', '').strip()
+    target_date = request.args.get('date', datetime.date.today().isoformat())
+
+    scores = load_leaderboard_scores()
+    privacy = load_leaderboard_privacy()
+    rankings = []
+
+    if period == 'daily':
+        # 单日排行
+        for username, user_scores in scores.items():
+            if not privacy.get(username, True):
+                continue
+            if target_date in user_scores:
+                entry = user_scores[target_date]
+                if school and entry.get('school', '') != school:
+                    continue
+                rankings.append({
+                    "username": username,
+                    "score": entry["score"],
+                    "meals_count": entry.get("meals_count", 0),
+                    "school": entry.get("school", "")
+                })
+    elif period == 'weekly':
+        # 最近7天平均分数排行
+        from datetime import timedelta
+        target = datetime.date.fromisoformat(target_date)
+        week_dates = [(target - timedelta(days=i)).isoformat() for i in range(7)]
+        for username, user_scores in scores.items():
+            if not privacy.get(username, True):
+                continue
+            week_entries = [user_scores[d] for d in week_dates if d in user_scores]
+            if not week_entries:
+                continue
+            # 取最近一条记录的学校作为该用户的学校
+            user_school = week_entries[0].get('school', '')
+            if school and user_school != school:
+                continue
+            avg_score = sum(e["score"] for e in week_entries) / len(week_entries)
+            total_meals = sum(e.get("meals_count", 0) for e in week_entries)
+            rankings.append({
+                "username": username,
+                "score": round(avg_score, 1),
+                "meals_count": total_meals,
+                "days": len(week_entries),
+                "school": user_school
+            })
+    elif period == 'monthly':
+        # 最近30天平均分数排行
+        from datetime import timedelta
+        target = datetime.date.fromisoformat(target_date)
+        month_dates = [(target - timedelta(days=i)).isoformat() for i in range(30)]
+        for username, user_scores in scores.items():
+            if not privacy.get(username, True):
+                continue
+            month_entries = [user_scores[d] for d in month_dates if d in user_scores]
+            if not month_entries:
+                continue
+            user_school = month_entries[0].get('school', '')
+            if school and user_school != school:
+                continue
+            avg_score = sum(e["score"] for e in month_entries) / len(month_entries)
+            total_meals = sum(e.get("meals_count", 0) for e in month_entries)
+            rankings.append({
+                "username": username,
+                "score": round(avg_score, 1),
+                "meals_count": total_meals,
+                "days": len(month_entries),
+                "school": user_school
+            })
+
+    # 按分数降序排列
+    rankings.sort(key=lambda x: x["score"], reverse=True)
+
+    # 收集所有学校列表用于前端筛选
+    all_schools = set()
+    for username, user_scores in scores.items():
+        for date_str, entry in user_scores.items():
+            s = entry.get('school', '')
+            if s:
+                all_schools.add(s)
+
+    return jsonify({
+        "success": True,
+        "rankings": rankings[:50],
+        "schools": sorted(all_schools)
+    })
+
+@app.route('/api/leaderboard/streak', methods=['GET'])
+def get_streak_leaderboard():
+    """获取连续打卡天数排行榜（毅力榜）"""
+    school = request.args.get('school', '').strip()
+    scores = load_leaderboard_scores()
+    privacy = load_leaderboard_privacy()
+    rankings = []
+
+    for username, user_scores in scores.items():
+        if not privacy.get(username, True):
+            continue
+        # 计算连续打卡天数
+        dates = sorted(user_scores.keys(), reverse=True)
+        if not dates:
+            continue
+        streak = 1
+        today = datetime.date.today()
+        last_date = datetime.date.fromisoformat(dates[0])
+        # 如果最近一次打卡不是今天或昨天，连续天数为0
+        if (today - last_date).days > 1:
+            streak = 0
+        else:
+            for i in range(1, len(dates)):
+                curr = datetime.date.fromisoformat(dates[i-1])
+                prev = datetime.date.fromisoformat(dates[i])
+                if (curr - prev).days == 1:
+                    streak += 1
+                else:
+                    break
+        if streak > 0:
+            # 获取学校信息（取最近一条记录的学校）
+            user_school = user_scores[dates[0]].get('school', '')
+            if school and user_school != school:
+                continue
+            rankings.append({
+                "username": username,
+                "streak_days": streak,
+                "school": user_school
+            })
+
+    rankings.sort(key=lambda x: x["streak_days"], reverse=True)
+    return jsonify({"success": True, "rankings": rankings[:50]})
+
+@app.route('/api/leaderboard/privacy', methods=['GET'])
+def get_leaderboard_privacy():
+    """获取用户的排行榜隐私设置"""
+    username = request.args.get('username', '').strip()
+    if not username:
+        return jsonify({"success": False, "message": "请提供用户名"}), 400
+    opted_in = is_opted_in(username)
+    return jsonify({"success": True, "opted_in": opted_in})
+
+@app.route('/api/leaderboard/privacy', methods=['PUT'])
+def set_leaderboard_privacy():
+    """设置用户的排行榜隐私（参与/退出）"""
+    data = request.json or {}
+    username = data.get('username', '').strip()
+    opted_in = data.get('opted_in', True)
+    if not username:
+        return jsonify({"success": False, "message": "请提供用户名"}), 400
+    privacy = load_leaderboard_privacy()
+    privacy[username] = opted_in
+    save_leaderboard_privacy(privacy)
+    return jsonify({"success": True, "opted_in": opted_in})
 
 
 # ========== 启动入口 ==========

@@ -2630,6 +2630,79 @@ async function saveCurrentMeal() {
     }
     updateTodayCheckinBar();
     updateDailyScore();
+    submitScoreToLeaderboard();
+}
+
+// ========== 排行榜：提交分数 ==========
+async function submitScoreToLeaderboard() {
+    const user = getMealUser();
+    if (!user) return;
+
+    // 检查隐私设置
+    try {
+        const privacyResp = await fetch('/api/leaderboard/privacy?username=' + encodeURIComponent(user));
+        const privacyData = await privacyResp.json();
+        if (privacyData.success && privacyData.opted_in === false) return; // 用户选择退出排行榜
+    } catch (e) {
+        console.warn('获取隐私设置失败:', e.message);
+        // 如果无法获取隐私设置，默认提交（首次用户未设置过）
+    }
+
+    const today = new Date().toISOString().split('T')[0];
+    const todayData = localGetMealLog(user, today);
+    const breakfast = todayData.breakfast || [];
+    const lunch = todayData.lunch || [];
+    const dinner = todayData.dinner || [];
+    const allDishes = [...breakfast, ...lunch, ...dinner];
+    const totalDishes = allDishes.length;
+    if (totalDishes === 0) return;
+
+    const mealsLogged = [breakfast.length > 0, lunch.length > 0, dinner.length > 0].filter(Boolean).length;
+    const goal = localGetGoal(user) || localStorage.getItem('user_goal') || '';
+
+    // 复用评分逻辑
+    let proteinCount = 0, vegetableCount = 0, unhealthyCount = 0, friedCount = 0;
+    for (const dish of allDishes) {
+        if (["鸡胸","牛肉","鱼","鸡蛋","豆腐","虾","排骨","瘦肉"].some(kw => dish.includes(kw))) proteinCount++;
+        if (["西兰花","青菜","黄瓜","番茄","蔬菜","沙拉","白菜","菠菜","芹菜","萝卜"].some(kw => dish.includes(kw))) vegetableCount++;
+        if (["炸鸡","红烧肉","蛋糕","薯条"].some(kw => dish.includes(kw))) { unhealthyCount++; friedCount++; }
+        if (["炸","煎"].some(kw => dish.includes(kw)) && !["清炸"].some(kw => dish.includes(kw))) friedCount++;
+    }
+
+    let score = 70;
+    if (goal === 'cutting') {
+        if (unhealthyCount > 0) score -= unhealthyCount * 10;
+        if (vegetableCount > 2) score += 10;
+        if (proteinCount > 0) score += 5;
+        if (mealsLogged >= 3) score += 5;
+    } else if (goal === 'bulking') {
+        if (proteinCount >= 3) score += 15;
+        else if (proteinCount >= 1) score += 5;
+        else score -= 10;
+        if (totalDishes >= 4) score += 5;
+    } else {
+        if (mealsLogged >= 3) score += 10;
+        if (vegetableCount > 0 && proteinCount > 0) score += 10;
+        else if (totalDishes > 0 && vegetableCount === 0) score -= 5;
+        if (friedCount > 2) score -= 5;
+    }
+    score = Math.max(0, Math.min(100, score));
+
+    try {
+        await fetch('/api/leaderboard/submit', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                username: user,
+                date: today,
+                score: score,
+                school: currentSchool || '',
+                meals_count: mealsLogged
+            })
+        });
+    } catch (e) {
+        console.warn('提交排行榜分数失败:', e.message);
+    }
 }
 
 // ========== 周饮食报告 ==========
@@ -3588,5 +3661,170 @@ async function loadAdminStats() {
         }
     } catch (e) {
         container.innerHTML = '<div style="text-align:center; padding:20px; color:#e74c3c;">加载失败</div>';
+    }
+}
+
+// ========== 排行榜功能 ==========
+let currentLeaderboardTab = 'daily';
+
+async function showLeaderboard() {
+    const modal = document.getElementById('leaderboardModal');
+    modal.classList.add('show');
+    await populateSchoolFilter();
+    await loadPrivacyPreference();
+    await loadLeaderboardData();
+}
+
+function closeLeaderboard() {
+    document.getElementById('leaderboardModal').classList.remove('show');
+}
+
+function switchLeaderboardTab(period) {
+    currentLeaderboardTab = period;
+    document.querySelectorAll('.lb-tab').forEach(tab => {
+        tab.classList.toggle('active', tab.dataset.period === period);
+    });
+    loadLeaderboardData();
+}
+
+async function populateSchoolFilter() {
+    try {
+        const resp = await fetch('/api/leaderboard?period=daily&school=');
+        const data = await resp.json();
+        if (data.schools && data.schools.length > 0) {
+            const select = document.getElementById('leaderboardSchoolFilter');
+            select.innerHTML = '<option value="">全部学校</option>';
+            data.schools.forEach(school => {
+                const opt = document.createElement('option');
+                opt.value = school;
+                opt.textContent = school;
+                if (school === currentSchool) opt.selected = true;
+                select.appendChild(opt);
+            });
+        }
+    } catch (e) {
+        console.warn('获取学校列表失败:', e.message);
+    }
+}
+
+async function loadLeaderboardData() {
+    const listEl = document.getElementById('leaderboardList');
+    listEl.innerHTML = '<div style="text-align:center;padding:30px;color:#999;">加载中...</div>';
+
+    const school = document.getElementById('leaderboardSchoolFilter').value;
+    const user = getMealUser();
+
+    try {
+        let url;
+        if (currentLeaderboardTab === 'streak') {
+            url = '/api/leaderboard/streak?school=' + encodeURIComponent(school);
+        } else {
+            url = '/api/leaderboard?period=' + currentLeaderboardTab + '&school=' + encodeURIComponent(school);
+        }
+
+        const resp = await fetch(url);
+        const data = await resp.json();
+
+        if (!data.success) {
+            listEl.innerHTML = '<div class="lb-empty"><span class="empty-icon">😕</span><p>加载失败</p></div>';
+            return;
+        }
+
+        renderLeaderboardList(data.rankings || [], user);
+    } catch (e) {
+        console.warn('加载排行榜失败:', e.message);
+        listEl.innerHTML = '<div class="lb-empty"><span class="empty-icon">📡</span><p>网络错误，请稍后重试</p></div>';
+    }
+}
+
+function renderLeaderboardList(rankings, currentUser) {
+    const listEl = document.getElementById('leaderboardList');
+
+    if (!rankings || rankings.length === 0) {
+        listEl.innerHTML = '<div class="lb-empty"><span class="empty-icon">🏆</span><p>暂无排行数据</p><p style="font-size:0.85em;margin-top:6px;">打卡后自动上榜！</p></div>';
+        return;
+    }
+
+    const medals = ['🥇', '🥈', '🥉'];
+    let html = '';
+
+    rankings.forEach(function(entry, idx) {
+        const rank = idx + 1;
+        const isMe = currentUser && entry.username === currentUser;
+        let topClass = rank <= 3 ? 'top-' + rank : '';
+        let meClass = isMe ? 'is-me' : '';
+
+        let rankDisplay;
+        if (rank <= 3) {
+            rankDisplay = '<span class="medal">' + medals[idx] + '</span>';
+        } else {
+            rankDisplay = rank;
+        }
+
+        let scoreDisplay;
+        if (currentLeaderboardTab === 'streak') {
+            scoreDisplay = '<div class="lb-streak"><span class="streak-fire">🔥</span>' + entry.streak_days + '天</div>';
+        } else {
+            var unit = currentLeaderboardTab === 'daily' ? '分' : '分/天';
+            scoreDisplay = '<div class="lb-score">' + entry.score + '<small>' + unit + '</small></div>';
+        }
+
+        html += '<div class="lb-item ' + topClass + ' ' + meClass + '">'
+            + '<div class="lb-rank">' + rankDisplay + '</div>'
+            + '<div class="lb-info">'
+            + '<div class="lb-name">' + escapeHtml(entry.username) + (isMe ? ' (我)' : '') + '</div>'
+            + '<div class="lb-school">' + escapeHtml(entry.school || '未知学校') + '</div>'
+            + '</div>'
+            + scoreDisplay
+            + '</div>';
+    });
+
+    listEl.innerHTML = html;
+}
+
+function escapeHtml(text) {
+    var div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+async function toggleLeaderboardPrivacy() {
+    var toggle = document.getElementById('leaderboardPrivacyToggle');
+    var optedIn = toggle.checked;
+    var user = getMealUser();
+    if (!user) return;
+
+    try {
+        var resp = await fetch('/api/leaderboard/privacy', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: user, opted_in: optedIn })
+        });
+        var data = await resp.json();
+        if (data.success) {
+            showNotification(optedIn ? '已加入排行榜' : '已从排行榜隐藏', 'success');
+        } else {
+            showNotification('设置失败，请重试', 'error');
+            toggle.checked = !optedIn;
+        }
+    } catch (e) {
+        console.warn('设置隐私失败:', e.message);
+        showNotification('网络错误', 'error');
+        toggle.checked = !optedIn;
+    }
+}
+
+async function loadPrivacyPreference() {
+    var user = getMealUser();
+    if (!user) return;
+    try {
+        var resp = await fetch('/api/leaderboard/privacy?username=' + encodeURIComponent(user));
+        var data = await resp.json();
+        if (data.success) {
+            var toggle = document.getElementById('leaderboardPrivacyToggle');
+            if (toggle) toggle.checked = data.opted_in !== false;
+        }
+    } catch (e) {
+        console.warn('加载隐私设置失败:', e.message);
     }
 }

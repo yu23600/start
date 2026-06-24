@@ -32,7 +32,10 @@
                 <span id="accountAvatarText">?</span>
             </button>
             <span class="account-status-name" id="accountStatusName">未登录</span>
-            <button onclick="showAccountPanel()" class="account-status-link">账号管理 ›</button>
+            <div style="margin-left:auto; display:flex; gap:8px; align-items:center;">
+                <button onclick="showLeaderboard()" class="leaderboard-entry-btn" title="排行榜">🏆 排行榜</button>
+                <button onclick="showAccountPanel()" class="account-status-link">账号管理 ›</button>
+            </div>
         </div>
 
         <!-- 学校显示区域 -->
@@ -384,9 +387,17 @@
                             <span class="account-info-label">📊 累计打卡</span>
                             <span class="account-info-value" id="accountPanelCheckins">0 天</span>
                         </div>
+                        <div class="account-info-row">
+                            <span class="account-info-label">🏆 排行榜</span>
+                            <label class="privacy-toggle">
+                                <input type="checkbox" id="leaderboardPrivacyToggle" checked onchange="toggleLeaderboardPrivacy()">
+                                <span class="privacy-slider"></span>
+                            </label>
+                        </div>
                     </div>
                     <!-- 操作按钮 -->
                     <div class="account-actions">
+                        <button onclick="showLeaderboard()" class="btn btn-primary account-action-btn">🏆 查看排行榜</button>
                         <button onclick="switchAccountFromPanel()" class="btn btn-primary account-action-btn">🔄 切换账号</button>
                         <button onclick="logoutAccount()" class="btn btn-secondary account-action-btn" style="color:#e74c3c;">🚪 退出账号</button>
                     </div>
@@ -550,6 +561,31 @@
                     <div id="adminStatsContent" class="admin-stats-grid">
                         <div style="text-align:center; padding:20px; color:#999;">加载中...</div>
                     </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 排行榜弹窗 -->
+        <div id="leaderboardModal" class="modal">
+            <div class="modal-content" style="max-width: 480px; max-height: 85vh; overflow-y: auto;">
+                <span class="close-btn" onclick="closeLeaderboard()">&times;</span>
+                <h2 class="leaderboard-title">🏆 饮食排行榜</h2>
+                <!-- 标签页 -->
+                <div class="leaderboard-tabs">
+                    <button class="lb-tab active" data-period="daily" onclick="switchLeaderboardTab('daily')">日榜</button>
+                    <button class="lb-tab" data-period="weekly" onclick="switchLeaderboardTab('weekly')">周榜</button>
+                    <button class="lb-tab" data-period="monthly" onclick="switchLeaderboardTab('monthly')">月榜</button>
+                    <button class="lb-tab" data-period="streak" onclick="switchLeaderboardTab('streak')">毅力榜</button>
+                </div>
+                <!-- 学校筛选 -->
+                <div class="leaderboard-filter">
+                    <select id="leaderboardSchoolFilter" class="form-control" onchange="loadLeaderboardData()" style="width:100%; padding:8px 12px; border-radius:10px; border:1px solid #e0e0e0; font-size:0.9em;">
+                        <option value="">全部学校</option>
+                    </select>
+                </div>
+                <!-- 排行列表 -->
+                <div id="leaderboardList" class="leaderboard-list">
+                    <div style="text-align:center; padding:30px; color:#999;">加载中...</div>
                 </div>
             </div>
         </div>

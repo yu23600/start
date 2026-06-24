@@ -54,6 +54,9 @@
                 <span class="checkin-summary" id="checkinSummary">今日还未打卡</span>
             </div>
             <div class="checkin-bar-right">
+                <button onclick="showAccountPanel()" class="account-avatar-btn" id="accountAvatarBtn" title="账号管理">
+                    <span id="accountAvatarText">?</span>
+                </button>
                 <button onclick="showMealCheckin()" class="btn btn-warning btn-small">📝 打卡</button>
             </div>
         </div>
@@ -348,6 +351,43 @@
             </div>
         </div>
 
+        <!-- 账号管理面板 -->
+        <div id="accountModal" class="modal">
+            <div class="modal-content" style="max-width: 380px;">
+                <span class="close-btn" onclick="closeAccountPanel()">&times;</span>
+                <div class="account-panel">
+                    <!-- 头像区域 -->
+                    <div class="account-header">
+                        <div class="account-avatar" id="accountPanelAvatar">
+                            <span id="accountPanelAvatarText">?</span>
+                        </div>
+                        <div class="account-name" id="accountPanelName">未登录</div>
+                        <div class="account-role-badge" id="accountPanelRole">普通用户</div>
+                    </div>
+                    <!-- 信息列表 -->
+                    <div class="account-info-list">
+                        <div class="account-info-row">
+                            <span class="account-info-label">📅 注册时间</span>
+                            <span class="account-info-value" id="accountPanelCreated">--</span>
+                        </div>
+                        <div class="account-info-row">
+                            <span class="account-info-label">🎯 饮食目标</span>
+                            <span class="account-info-value" id="accountPanelGoal">未设置</span>
+                        </div>
+                        <div class="account-info-row">
+                            <span class="account-info-label">📊 累计打卡</span>
+                            <span class="account-info-value" id="accountPanelCheckins">0 天</span>
+                        </div>
+                    </div>
+                    <!-- 操作按钮 -->
+                    <div class="account-actions">
+                        <button onclick="switchAccountFromPanel()" class="btn btn-primary account-action-btn">🔄 切换账号</button>
+                        <button onclick="logoutAccount()" class="btn btn-secondary account-action-btn" style="color:#e74c3c;">🚪 退出账号</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- 周报告弹窗 -->
         <div id="weeklyReportModal" class="modal">
             <div class="modal-content" style="max-width: 600px; max-height: 85vh; overflow-y: auto;">
@@ -418,11 +458,12 @@
                 <!-- 添加菜品区域 -->
                 <div id="addDishArea" style="display:none;margin-bottom:15px;padding:15px;background:#f8f9fa;border-radius:12px;">
                     <p style="font-weight:600;color:#495057;margin-bottom:8px;">添加新菜品</p>
-                    <div style="display:flex;gap:8px;margin-bottom:10px;">
-                        <input type="text" id="addDishInput" placeholder="输入菜品名称" style="flex:1;padding:10px 14px;border:2px solid #e0e0e0;border-radius:10px;font-size:0.95em;outline:none;" onkeypress="if(event.key==='Enter')confirmAddDish()">
+                    <div style="display:flex;gap:8px;margin-bottom:4px;">
+                        <input type="text" id="addDishInput" placeholder="输入菜品名称，按回车快速添加" style="flex:1;padding:10px 14px;border:2px solid #e0e0e0;border-radius:10px;font-size:0.95em;outline:none;" onkeypress="if(event.key==='Enter')confirmAddDish()">
                         <button onclick="confirmAddDish()" class="btn btn-primary btn-small">添加</button>
                         <button onclick="cancelAddDish()" class="btn btn-secondary btn-small">取消</button>
                     </div>
+                    <p style="font-size:0.8em;color:#999;margin:0 0 10px 0;">💡 输入后按 Enter 键可快速添加，连续添加多个菜品</p>
                     <!-- 标注区域 -->
                     <div id="addDishTagArea" style="display:none;">
                         <p style="font-size:0.85em;color:#666;margin-bottom:6px;">为这道菜标注分类（可跳过）：</p>

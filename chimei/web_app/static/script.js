@@ -2073,6 +2073,7 @@ function updateMealUserDisplay() {
     const user = getMealUser();
     const el = document.getElementById('mealUserDisplay');
     if (el) el.textContent = user || '未设置';
+    updateAccountButton();
 }
 
 async function switchMealUser() {
@@ -2080,7 +2081,100 @@ async function switchMealUser() {
     const name = await showMealLoginDialog();
     if (name) {
         updateMealUserDisplay();
+        updateAccountButton();
         showMealCheckin();
+    }
+}
+
+// ========== 账号管理面板 ==========
+function updateAccountButton() {
+    const user = getMealUser();
+    const avatarText = document.getElementById('accountAvatarText');
+    if (avatarText) {
+        avatarText.textContent = user ? user.charAt(0).toUpperCase() : '?';
+    }
+}
+
+function showAccountPanel() {
+    const user = getMealUser();
+    if (!user) {
+        showNotification('请先登录', 'warning');
+        return;
+    }
+    // 填充用户信息
+    const avatarText = document.getElementById('accountPanelAvatarText');
+    if (avatarText) avatarText.textContent = user.charAt(0).toUpperCase();
+
+    const nameEl = document.getElementById('accountPanelName');
+    if (nameEl) nameEl.textContent = user;
+
+    // 注册时间
+    const users = _loadLocalUsers();
+    const userData = users[user];
+    const createdEl = document.getElementById('accountPanelCreated');
+    if (createdEl) {
+        if (userData && userData.created_at) {
+            const d = new Date(userData.created_at);
+            createdEl.textContent = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+        } else {
+            createdEl.textContent = '未知';
+        }
+    }
+
+    // 饮食目标
+    const goalEl = document.getElementById('accountPanelGoal');
+    if (goalEl) {
+        const goal = localGetGoal(user) || userGoal || '';
+        const goalLabels = { cutting: '减脂期', bulking: '增肌期', healthy: '健康饮食' };
+        goalEl.textContent = goalLabels[goal] || '未设置';
+    }
+
+    // 累计打卡天数
+    const checkinEl = document.getElementById('accountPanelCheckins');
+    if (checkinEl) {
+        const logs = _loadLocalLogs();
+        const userLogs = logs[user] || {};
+        const days = Object.keys(userLogs).filter(date => {
+            const day = userLogs[date];
+            return (day.breakfast && day.breakfast.length > 0) ||
+                   (day.lunch && day.lunch.length > 0) ||
+                   (day.dinner && day.dinner.length > 0);
+        }).length;
+        checkinEl.textContent = `${days} 天`;
+    }
+
+    document.getElementById('accountModal').classList.add('show');
+}
+
+function closeAccountPanel() {
+    document.getElementById('accountModal').classList.remove('show');
+}
+
+async function logoutAccount() {
+    if (!confirm('确定要退出当前账号吗？')) return;
+    closeAccountPanel();
+    clearMealAuth();
+    userGoal = '';
+    localStorage.removeItem('user_goal');
+    const name = await showMealLoginDialog();
+    if (name) {
+        updateMealUserDisplay();
+        updateAccountButton();
+        updateDailyScore();
+        updateTodayCheckinBar();
+    }
+}
+
+async function switchAccountFromPanel() {
+    closeAccountPanel();
+    clearMealAuth();
+    const name = await showMealLoginDialog();
+    if (name) {
+        updateMealUserDisplay();
+        updateAccountButton();
+        updateDailyScore();
+        updateTodayCheckinBar();
+        showNotification(`已切换到「${name}」`, 'success');
     }
 }
 

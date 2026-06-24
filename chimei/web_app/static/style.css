@@ -267,6 +267,48 @@ body {
     flex: 1;
 }
 
+/* ========== 主要/次要操作布局 ========== */
+.primary-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-top: 20px;
+}
+
+.btn-primary-action {
+    width: 100%;
+    padding: 18px 24px;
+    font-size: 1.15em;
+    min-height: 56px;
+    border-radius: 12px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
+    text-transform: none;
+    letter-spacing: 0;
+}
+
+.secondary-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 15px;
+}
+
+.btn-small-action {
+    flex: 1;
+    min-width: calc(33.333% - 6px);
+    padding: 10px 8px;
+    font-size: 0.85em;
+    min-height: 40px;
+    border-radius: 8px;
+    opacity: 0.85;
+    text-transform: none;
+    letter-spacing: 0;
+}
+
+.btn-small-action:hover {
+    opacity: 1;
+}
+
 /* ========== 云端同步区域 ========== */
 .cloud-sync-section {
     margin-top: 30px;
@@ -744,6 +786,20 @@ body {
         min-height: 48px; /* 触控友好 */
     }
 
+    /* 主要/次要操作移动端 */
+    .btn-primary-action {
+        padding: 20px 24px;
+        font-size: 1.2em;
+        min-height: 60px;
+    }
+
+    .btn-small-action {
+        min-width: calc(50% - 4px);
+        padding: 12px 8px;
+        font-size: 0.9em;
+        min-height: 44px;
+    }
+
     /* 专业模式表单 */
     .section-card {
         padding: 15px;
@@ -864,6 +920,10 @@ body {
 
     .school-selector .btn {
         width: 100%;
+    }
+
+    .btn-small-action {
+        min-width: 100%;
     }
 }
 

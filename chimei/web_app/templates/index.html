@@ -50,17 +50,24 @@
                 
                 <p class="hint">提示：每行输入一个菜品，或用逗号/空格分隔多个菜品</p>
                 
-                <div class="action-buttons">
-                    <button onclick="saveMenu()" class="btn btn-primary">保存当前菜单</button>
-                    <button onclick="randomRecommend()" class="btn btn-success">随机推荐一个菜品</button>
-                    <button onclick="showDishFetcher()" class="btn btn-info">🔍 自动获取菜品</button>
-                    <button onclick="showMealCheckin()" class="btn btn-warning">📝 今日打卡</button>
+                <!-- 主要操作：随机推荐 + 打卡 -->
+                <div class="primary-actions">
+                    <button onclick="randomRecommend()" class="btn btn-success btn-primary-action">
+                        🎲 随机推荐一个菜品
+                    </button>
+                    <button onclick="showMealCheckin()" class="btn btn-warning btn-primary-action">
+                        📝 今日打卡
+                    </button>
                 </div>
-                <div class="action-buttons" style="margin-top: 8px;">
-                    <button onclick="exportData()" class="btn btn-secondary">📤 导出数据</button>
-                    <button onclick="document.getElementById('importFileInput').click()" class="btn btn-secondary">📥 导入数据</button>
-                    <button onclick="showWeeklyReport()" class="btn btn-info">📊 饮食报告</button>
-                    <button onclick="showGallery()" class="btn btn-secondary">🗺️ 高校食堂图鉴</button>
+                
+                <!-- 次要操作 -->
+                <div class="secondary-actions">
+                    <button onclick="saveMenu()" class="btn btn-secondary btn-small-action">保存菜单</button>
+                    <button onclick="showDishFetcher()" class="btn btn-info btn-small-action">🔍 获取菜品</button>
+                    <button onclick="exportData()" class="btn btn-secondary btn-small-action">📤 导出</button>
+                    <button onclick="document.getElementById('importFileInput').click()" class="btn btn-secondary btn-small-action">📥 导入</button>
+                    <button onclick="showWeeklyReport()" class="btn btn-info btn-small-action">📊 报告</button>
+                    <button onclick="showGallery()" class="btn btn-secondary btn-small-action">🗺️ 图鉴</button>
                     <input type="file" id="importFileInput" accept=".json" style="display:none;" onchange="importData(event)">
                 </div>
             </div>

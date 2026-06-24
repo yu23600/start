@@ -2501,7 +2501,19 @@ body {
 }
 
 /* ========== 账号管理 ========== */
-/* 打卡栏头像按钮 */
+/* 账号状态栏 */
+.account-status-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 16px;
+    background: #fff;
+    border-radius: 12px;
+    margin-bottom: 12px;
+    border: 1px solid #e8e8e8;
+}
+
+/* 打卡栏头像按钮（复用） */
 .account-avatar-btn {
     width: 36px;
     height: 36px;
@@ -2526,6 +2538,29 @@ body {
     font-size: 0.95em;
     font-weight: 700;
     line-height: 1;
+}
+
+.account-status-name {
+    flex: 1;
+    font-size: 0.95em;
+    color: #2c3e50;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.account-status-link {
+    background: none;
+    border: none;
+    color: #667eea;
+    font-size: 0.85em;
+    cursor: pointer;
+    padding: 4px 8px;
+    white-space: nowrap;
+}
+.account-status-link:hover {
+    text-decoration: underline;
 }
 
 /* 账号面板 */

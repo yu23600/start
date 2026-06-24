@@ -26,6 +26,15 @@
             <p class="subtitle">智能食堂菜品推荐系统</p>
         </header>
 
+        <!-- 账号状态栏 -->
+        <div class="account-status-bar" id="accountStatusBar">
+            <button onclick="showAccountPanel()" class="account-avatar-btn" id="accountAvatarBtn" title="账号管理">
+                <span id="accountAvatarText">?</span>
+            </button>
+            <span class="account-status-name" id="accountStatusName">未登录</span>
+            <button onclick="showAccountPanel()" class="account-status-link">账号管理 ›</button>
+        </div>
+
         <!-- 学校显示区域 -->
         <div class="school-selector">
             <div class="school-display">
@@ -54,9 +63,6 @@
                 <span class="checkin-summary" id="checkinSummary">今日还未打卡</span>
             </div>
             <div class="checkin-bar-right">
-                <button onclick="showAccountPanel()" class="account-avatar-btn" id="accountAvatarBtn" title="账号管理">
-                    <span id="accountAvatarText">?</span>
-                </button>
                 <button onclick="showMealCheckin()" class="btn btn-warning btn-small">📝 打卡</button>
             </div>
         </div>

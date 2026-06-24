@@ -1958,37 +1958,93 @@ function showMealLoginDialog() {
                         btn.textContent = '注册';
                         return;
                     }
-                    const result = localRegister(username, password);
-                    if (result.success) {
-                        setMealUser(username);
-                        document.body.removeChild(overlay);
-                        resolve(username);
-                    } else {
-                        errorEl.textContent = result.message;
-                        errorEl.style.display = '';
-                        btn.disabled = false;
-                        btn.textContent = '注册';
+                    // 先调用服务器API注册，确保昵称全局唯一
+                    try {
+                        const resp = await fetch('/api/meal-user/register', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ username, password })
+                        });
+                        const data = await resp.json();
+                        if (data.success) {
+                            // 服务器注册成功，同步到本地缓存
+                            localRegister(username, password);
+                            setMealUser(username);
+                            document.body.removeChild(overlay);
+                            resolve(username);
+                        } else {
+                            errorEl.textContent = data.message || '注册失败';
+                            errorEl.style.display = '';
+                            btn.disabled = false;
+                            btn.textContent = '注册';
+                        }
+                    } catch (e) {
+                        // 服务器不可用，降级到本地注册
+                        console.warn('服务器注册失败，使用本地注册:', e.message);
+                        const result = localRegister(username, password);
+                        if (result.success) {
+                            setMealUser(username);
+                            document.body.removeChild(overlay);
+                            resolve(username);
+                        } else {
+                            errorEl.textContent = result.message;
+                            errorEl.style.display = '';
+                            btn.disabled = false;
+                            btn.textContent = '注册';
+                        }
                     }
                 } else {
-                    // 登录
-                    const result = localLogin(username, password);
-                    if (result.success) {
-                        setMealUser(username);
-                        const autoCheck = overlay.querySelector('#autoLoginCheck');
-                        if (autoCheck && autoCheck.checked) {
-                            localStorage.setItem('meal_pwd', password);
-                            localStorage.setItem('meal_auto_login', 'true');
+                    // 登录：优先调用服务器API验证身份
+                    try {
+                        const resp = await fetch('/api/meal-user/login', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ username, password })
+                        });
+                        const data = await resp.json();
+                        if (data.success) {
+                            // 服务器验证通过，同步到本地
+                            localRegister(username, password); // 确保本地也有记录
+                            if (data.goal) localSaveGoal(username, data.goal);
+                            setMealUser(username);
+                            const autoCheck = overlay.querySelector('#autoLoginCheck');
+                            if (autoCheck && autoCheck.checked) {
+                                localStorage.setItem('meal_pwd', password);
+                                localStorage.setItem('meal_auto_login', 'true');
+                            } else {
+                                localStorage.removeItem('meal_pwd');
+                                localStorage.removeItem('meal_auto_login');
+                            }
+                            document.body.removeChild(overlay);
+                            resolve(username);
                         } else {
-                            localStorage.removeItem('meal_pwd');
-                            localStorage.removeItem('meal_auto_login');
+                            errorEl.textContent = data.message || '登录失败';
+                            errorEl.style.display = '';
+                            btn.disabled = false;
+                            btn.textContent = '登录';
                         }
-                        document.body.removeChild(overlay);
-                        resolve(username);
-                    } else {
-                        errorEl.textContent = result.message;
-                        errorEl.style.display = '';
-                        btn.disabled = false;
-                        btn.textContent = '登录';
+                    } catch (e) {
+                        // 服务器不可用，降级到本地登录
+                        console.warn('服务器登录失败，使用本地登录:', e.message);
+                        const result = localLogin(username, password);
+                        if (result.success) {
+                            setMealUser(username);
+                            const autoCheck = overlay.querySelector('#autoLoginCheck');
+                            if (autoCheck && autoCheck.checked) {
+                                localStorage.setItem('meal_pwd', password);
+                                localStorage.setItem('meal_auto_login', 'true');
+                            } else {
+                                localStorage.removeItem('meal_pwd');
+                                localStorage.removeItem('meal_auto_login');
+                            }
+                            document.body.removeChild(overlay);
+                            resolve(username);
+                        } else {
+                            errorEl.textContent = result.message;
+                            errorEl.style.display = '';
+                            btn.disabled = false;
+                            btn.textContent = '登录';
+                        }
                     }
                 }
             };
@@ -2024,11 +2080,29 @@ async function tryAutoLogin() {
     const user = getMealUser();
     const pwd = localStorage.getItem('meal_pwd');
     if (!user || !pwd) return null;
-    const result = localLogin(user, pwd);
-    if (result.success) return user;
-    localStorage.removeItem('meal_pwd');
-    localStorage.removeItem('meal_auto_login');
-    return null;
+    // 优先调用服务器API验证
+    try {
+        const resp = await fetch('/api/meal-user/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: user, password: pwd })
+        });
+        const data = await resp.json();
+        if (data.success) {
+            if (data.goal) localSaveGoal(user, data.goal);
+            return user;
+        }
+        localStorage.removeItem('meal_pwd');
+        localStorage.removeItem('meal_auto_login');
+        return null;
+    } catch (e) {
+        // 服务器不可用，降级到本地验证
+        const result = localLogin(user, pwd);
+        if (result.success) return user;
+        localStorage.removeItem('meal_pwd');
+        localStorage.removeItem('meal_auto_login');
+        return null;
+    }
 }
 
 async function startupMealLogin() {
@@ -2092,6 +2166,10 @@ function updateAccountButton() {
     const avatarText = document.getElementById('accountAvatarText');
     if (avatarText) {
         avatarText.textContent = user ? user.charAt(0).toUpperCase() : '?';
+    }
+    const statusName = document.getElementById('accountStatusName');
+    if (statusName) {
+        statusName.textContent = user || '未登录';
     }
 }
 

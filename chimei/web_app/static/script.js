@@ -118,6 +118,7 @@ document.addEventListener('DOMContentLoaded', function() {
     loadAllergies(); // 恢复过敏设置
     loadUserGoal(); // 加载用户目标
     updateTodayCheckinBar(); // 更新顶部打卡状态
+    updateDailyScore(); // 更新今日饮食评分仪表
 });
 
 function setupEventListeners() {
@@ -1919,6 +1920,7 @@ async function startupMealLogin() {
         if (user) {
             setMealUser(user); // 设置角色并更新管理员按钮
             updateMealUserDisplay();
+            updateDailyScore(); // 登录后刷新评分仪表
             // 检查是否需要设置目标
             await checkAndShowGoalWizard();
             return;
@@ -1929,6 +1931,7 @@ async function startupMealLogin() {
     const user = await showMealLoginDialog();
     if (user) {
         updateMealUserDisplay();
+        updateDailyScore(); // 登录后刷新评分仪表
         // 登录后检查是否需要设置目标
         await checkAndShowGoalWizard();
     }
@@ -2140,6 +2143,76 @@ function updateTodayCheckinBar() {
     }
 }
 
+// ========== 今日饮食评分仪表 ==========
+async function updateDailyScore() {
+    const user = getMealUser();
+    if (!user) return;
+
+    const ring = document.getElementById('heroGaugeRing');
+    const scoreEl = document.getElementById('heroScoreNumber');
+    const commentEl = document.getElementById('heroComment');
+    const tagsEl = document.getElementById('heroTags');
+    if (!ring || !scoreEl) return;
+
+    try {
+        const resp = await fetch(`/api/daily-score?username=${encodeURIComponent(user)}`);
+        const data = await resp.json();
+        if (!data.success) return;
+
+        const score = data.score || 0;
+        const angle = (score / 100) * 360;
+
+        // 颜色
+        let color, colorClass;
+        if (score >= 90) { color = '#27ae60'; colorClass = 'hero-score-green'; }
+        else if (score >= 70) { color = '#2980b9'; colorClass = 'hero-score-blue'; }
+        else if (score >= 50) { color = '#e67e22'; colorClass = 'hero-score-orange'; }
+        else if (score > 0) { color = '#e74c3c'; colorClass = 'hero-score-red'; }
+        else { color = '#bdc3c7'; colorClass = 'hero-score-gray'; }
+
+        // 更新环形仪表
+        ring.style.setProperty('--gauge-angle', angle);
+        ring.style.setProperty('--gauge-color', color);
+        // Fallback: 直接设置 background (某些浏览器不支持 CSS变量在 conic-gradient 中)
+        ring.style.background = `conic-gradient(${color} ${angle}deg, #e8ecf1 ${angle}deg)`;
+
+        // 分数数字
+        scoreEl.textContent = score;
+        scoreEl.className = 'hero-score-number ' + colorClass;
+
+        // 打卡状态
+        const checkin = data.checkin || {};
+        updateHeroCheckin('heroBreakfast', '早餐', checkin.breakfast);
+        updateHeroCheckin('heroLunch', '午餐', checkin.lunch);
+        updateHeroCheckin('heroDinner', '晚餐', checkin.dinner);
+
+        // 动态评语
+        if (commentEl) {
+            commentEl.textContent = data.comment || '';
+        }
+
+        // 统计标签
+        if (tagsEl) {
+            tagsEl.innerHTML = '';
+            (data.tags || []).forEach(tag => {
+                const span = document.createElement('span');
+                span.className = 'hero-tag hero-tag-' + (tag.type || 'info');
+                span.textContent = tag.text;
+                tagsEl.appendChild(span);
+            });
+        }
+    } catch (e) {
+        console.error('获取每日评分失败:', e);
+    }
+}
+
+function updateHeroCheckin(elementId, mealName, isChecked) {
+    const el = document.getElementById(elementId);
+    if (!el) return;
+    el.className = 'hero-checkin-item ' + (isChecked ? 'checked' : 'unchecked');
+    el.innerHTML = mealName + ' <em>' + (isChecked ? '✅' : '✗') + '</em>';
+}
+
 async function saveCurrentMeal() {
     const meal = currentMealTab;
     const dishes = todayMeals[meal] || [];
@@ -2155,6 +2228,7 @@ async function saveCurrentMeal() {
     localSaveMealLog(user, today, meal, dishes);
     showNotification(`${mealNames[meal]}已保存 ${dishes.length} 道菜品`, 'success');
     updateTodayCheckinBar();
+    updateDailyScore();
 }
 
 // ========== 周饮食报告 ==========

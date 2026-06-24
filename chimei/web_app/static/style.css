@@ -2243,3 +2243,188 @@ body {
         width: 100%;
     }
 }
+
+/* ========== 今日饮食评分 - 英雄仪表组件 ========== */
+.hero-score-section {
+    padding: 30px 20px 25px;
+    text-align: center;
+    background: linear-gradient(180deg, #f8f9ff 0%, #ffffff 100%);
+    border-bottom: 1px solid #eef0f5;
+}
+
+.hero-gauge-wrapper {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 18px;
+}
+
+.hero-gauge-ring {
+    width: 220px;
+    height: 220px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: conic-gradient(
+        var(--gauge-color, #bdc3c7) calc(var(--gauge-angle, 0) * 1deg),
+        #e8ecf1 calc(var(--gauge-angle, 0) * 1deg)
+    );
+    transition: --gauge-angle 1s ease-out, --gauge-color 0.5s ease;
+    position: relative;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+/* Fallback for browsers that don't support CSS custom properties in conic-gradient */
+@supports not (background: conic-gradient(red 0deg, blue 360deg)) {
+    .hero-gauge-ring {
+        background: #e8ecf1;
+    }
+}
+
+.hero-gauge-inner {
+    width: 180px;
+    height: 180px;
+    border-radius: 50%;
+    background: white;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.hero-score-number {
+    font-size: 3.5em;
+    font-weight: 800;
+    line-height: 1;
+    color: #2c3e50;
+    transition: color 0.5s ease;
+    letter-spacing: -2px;
+}
+
+.hero-score-label {
+    font-size: 0.85em;
+    color: #95a5a6;
+    margin-top: 6px;
+    font-weight: 500;
+}
+
+.hero-checkin-row {
+    display: flex;
+    justify-content: center;
+    gap: 24px;
+    margin-bottom: 14px;
+}
+
+.hero-checkin-item {
+    font-size: 0.95em;
+    color: #7f8c8d;
+    font-weight: 500;
+}
+
+.hero-checkin-item em {
+    font-style: normal;
+    font-size: 1.15em;
+    margin-left: 2px;
+}
+
+.hero-checkin-item.checked em {
+    color: #27ae60;
+}
+
+.hero-checkin-item.unchecked em {
+    color: #e74c3c;
+    opacity: 0.6;
+}
+
+.hero-comment {
+    font-size: 1.05em;
+    color: #34495e;
+    margin-bottom: 14px;
+    font-weight: 500;
+    min-height: 1.4em;
+    padding: 0 10px;
+}
+
+.hero-tags {
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.hero-tag {
+    display: inline-block;
+    padding: 5px 12px;
+    border-radius: 20px;
+    font-size: 0.82em;
+    font-weight: 500;
+}
+
+.hero-tag-good {
+    background: #e8f5e9;
+    color: #2e7d32;
+}
+
+.hero-tag-warn {
+    background: #fff3e0;
+    color: #e65100;
+}
+
+.hero-tag-info {
+    background: #e3f2fd;
+    color: #1565c0;
+}
+
+/* 分数颜色 */
+.hero-score-green .hero-score-number { color: #27ae60; }
+.hero-score-blue .hero-score-number { color: #2980b9; }
+.hero-score-orange .hero-score-number { color: #e67e22; }
+.hero-score-red .hero-score-number { color: #e74c3c; }
+.hero-score-gray .hero-score-number { color: #bdc3c7; }
+
+/* 动画 */
+@keyframes heroGaugeAppear {
+    from {
+        transform: scale(0.8);
+        opacity: 0;
+    }
+    to {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+.hero-score-section {
+    animation: heroGaugeAppear 0.6s ease-out;
+}
+
+/* 响应式 */
+@media (max-width: 480px) {
+    .hero-gauge-ring {
+        width: 180px;
+        height: 180px;
+    }
+    .hero-gauge-inner {
+        width: 148px;
+        height: 148px;
+    }
+    .hero-score-number {
+        font-size: 2.8em;
+    }
+    .hero-score-label {
+        font-size: 0.78em;
+    }
+    .hero-checkin-row {
+        gap: 16px;
+    }
+    .hero-checkin-item {
+        font-size: 0.88em;
+    }
+    .hero-comment {
+        font-size: 0.95em;
+    }
+    .hero-score-section {
+        padding: 22px 15px 20px;
+    }
+}

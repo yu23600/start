@@ -2150,6 +2150,185 @@ def daily_briefing():
     })
 
 
+@app.route('/api/daily-score', methods=['GET'])
+def daily_score():
+    """今日饮食评分 - 用于首页英雄仪表组件"""
+    username = request.args.get('username', '').strip()
+    if not username:
+        return jsonify({"success": False, "message": "请先登录"}), 400
+
+    today = time.strftime("%Y-%m-%d")
+    logs = load_meal_logs()
+    user_logs = logs.get(username, {})
+    today_data = user_logs.get(today, {"breakfast": [], "lunch": [], "dinner": []})
+
+    breakfast = today_data.get("breakfast", [])
+    lunch = today_data.get("lunch", [])
+    dinner = today_data.get("dinner", [])
+    all_dishes = breakfast + lunch + dinner
+    total_dishes = len(all_dishes)
+
+    # 打卡状态
+    checkin = {
+        "breakfast": len(breakfast) > 0,
+        "lunch": len(lunch) > 0,
+        "dinner": len(dinner) > 0
+    }
+    meals_logged = sum(1 for v in checkin.values() if v)
+
+    # 无数据时返回基础信息
+    if total_dishes == 0:
+        return jsonify({
+            "success": True,
+            "score": 0,
+            "checkin": checkin,
+            "meals_logged": 0,
+            "total_dishes": 0,
+            "protein_count": 0,
+            "vegetable_count": 0,
+            "unhealthy_count": 0,
+            "fried_count": 0,
+            "comment": "今天还没有打卡哦，快去记录第一餐吧！",
+            "tags": [],
+            "goal": ""
+        })
+
+    # 获取用户目标
+    users = load_meal_users()
+    goal = users.get(username, {}).get('goal', '') or ''
+
+    # 分析菜品标签
+    all_tags = []
+    protein_count = 0
+    vegetable_count = 0
+    unhealthy_count = 0
+    fried_count = 0
+
+    for dish in all_dishes:
+        dish_tags = FOOD_TAGS.get(dish, [])
+        all_tags.extend(dish_tags)
+
+        has_protein_tag = any(t in dish_tags for t in ["高蛋白", "鸡肉", "猪肉", "牛肉", "鱼", "豆制品", "鸡蛋", "豆腐", "虾"])
+        if not has_protein_tag:
+            for kw in ["鸡胸", "牛肉", "鱼", "鸡蛋", "豆腐", "虾", "排骨", "瘦肉"]:
+                if kw in dish:
+                    has_protein_tag = True
+                    break
+        if has_protein_tag:
+            protein_count += 1
+
+        has_veg_tag = any(t in dish_tags for t in ["蔬菜", "菌菇", "根茎类"])
+        if not has_veg_tag:
+            for kw in ["西兰花", "青菜", "黄瓜", "番茄", "蔬菜", "沙拉", "白菜", "菠菜", "芹菜", "萝卜"]:
+                if kw in dish:
+                    has_veg_tag = True
+                    break
+        if has_veg_tag:
+            vegetable_count += 1
+
+        has_unhealthy_tag = any(t in dish_tags for t in ["高脂", "高糖"])
+        if not has_unhealthy_tag:
+            for kw in ["炸鸡", "红烧肉", "蛋糕", "薯条", "炸"]:
+                if kw in dish:
+                    has_unhealthy_tag = True
+                    break
+        if has_unhealthy_tag:
+            unhealthy_count += 1
+
+        has_fried_tag = "油炸" in dish_tags or any(t in dish_tags for t in ["油炸"])
+        if not has_fried_tag:
+            for kw in ["炸鸡", "薯条", "炸"]:
+                if kw in dish:
+                    has_fried_tag = True
+                    break
+        if has_fried_tag:
+            fried_count += 1
+
+    # 评分计算
+    score = 70
+
+    if goal == 'cutting':
+        if unhealthy_count > 0:
+            score -= unhealthy_count * 10
+        if vegetable_count > 2:
+            score += 10
+        if protein_count > 0:
+            score += 5
+        if meals_logged >= 3:
+            score += 5
+    elif goal == 'bulking':
+        if protein_count >= 3:
+            score += 15
+        elif protein_count >= 1:
+            score += 5
+        else:
+            score -= 10
+        if total_dishes >= 4:
+            score += 5
+    else:  # healthy or no goal
+        if meals_logged >= 3:
+            score += 10
+        if vegetable_count > 0 and protein_count > 0:
+            score += 10
+        elif total_dishes > 0 and vegetable_count == 0:
+            score -= 5
+        if fried_count > 2:
+            score -= 5
+
+    # 动态评语
+    comment = ""
+    if score >= 90:
+        comment = "今天饮食非常均衡，继续保持！"
+    elif score >= 70:
+        comment = "今天吃得不错，还可以更好哦"
+    elif score >= 50:
+        comment = "饮食还有改善空间，注意荤素搭配"
+    else:
+        comment = "今天饮食需要注意调整哦"
+
+    # 目标相关的详细评语
+    if goal == 'bulking':
+        if protein_count >= 3:
+            comment = f"蛋白质摄入{protein_count}次，增肌营养跟上了！"
+        elif protein_count == 0:
+            comment = "今天蛋白质摄入不足，建议加份鸡蛋或豆腐"
+    elif goal == 'cutting':
+        if unhealthy_count == 0 and vegetable_count > 0:
+            comment = "清淡饮食+蔬菜，减脂节奏把握得很好！"
+        elif unhealthy_count > 0:
+            comment = f"今天有{unhealthy_count}道高油菜品，建议换成清蒸或凉拌"
+
+    # 统计标签
+    tags = []
+    if protein_count > 0:
+        tags.append({"text": f"蛋白质 {protein_count}次", "type": "good"})
+    if vegetable_count > 0:
+        tags.append({"text": f"蔬菜 {vegetable_count}次", "type": "good"})
+    if vegetable_count == 0 and total_dishes > 0:
+        tags.append({"text": "蔬菜摄入偏少", "type": "warn"})
+    if fried_count > 0:
+        tags.append({"text": f"油炸 {fried_count}次", "type": "warn" if fried_count > 1 else "info"})
+    if meals_logged < 3 and total_dishes > 0:
+        tags.append({"text": f"已打卡{meals_logged}餐", "type": "info"})
+
+    score = max(0, min(100, score))
+
+    return jsonify({
+        "success": True,
+        "score": score,
+        "checkin": checkin,
+        "meals_logged": meals_logged,
+        "total_dishes": total_dishes,
+        "protein_count": protein_count,
+        "vegetable_count": vegetable_count,
+        "unhealthy_count": unhealthy_count,
+        "fried_count": fried_count,
+        "comment": comment,
+        "tags": tags,
+        "goal": goal
+    })
+
+
 @app.route('/api/meal-log/users', methods=['GET'])
 def get_meal_log_users():
     """返回所有有打卡记录的用户名列表"""

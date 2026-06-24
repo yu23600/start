@@ -747,11 +747,27 @@ def get_universities():
 
 @app.route('/api/curated-database', methods=['GET'])
 def get_curated_database():
-    """返回精选菜品数据库（食堂图鉴）"""
+    """返回所有学校的已保存菜单（食堂图鉴）"""
+    db_data = load_all_data()
+    schools = {}
+    for name, info in db_data.items():
+        menu = info.get("menu", "") if isinstance(info, dict) else str(info)
+        items = [item.strip() for item in menu.split("\n") if item.strip()]
+        if items:
+            last_modified = info.get("last_modified", "") if isinstance(info, dict) else ""
+            schools[name] = {
+                "dishes": items,
+                "source": f"云端菜单（{last_modified}）" if last_modified else "云端菜单",
+                "confidence": "high",
+                "dish_count": len(items)
+            }
+    # 如果数据库为空，回退到精选数据库
+    if not schools:
+        schools = CURATED_DATABASE
     return jsonify({
         "success": True,
-        "schools": CURATED_DATABASE,
-        "count": len(CURATED_DATABASE)
+        "schools": schools,
+        "count": len(schools)
     })
 
 
@@ -1162,7 +1178,7 @@ def get_dish_sources():
 
 @app.route('/api/dishes/fetch', methods=['POST'])
 def api_fetch_dishes():
-    """获取指定学校的菜品数据"""
+    """获取指定学校的菜品数据（优先返回用户已保存的菜单）"""
     data = request.json or {}
     school_name = data.get('school_name', '').strip()
     source = data.get('source', None)
@@ -1170,9 +1186,28 @@ def api_fetch_dishes():
     if not school_name:
         return jsonify({"success": False, "message": "学校名称不能为空"}), 400
 
+    # 优先从数据库读取用户已保存的菜单
+    db_data = load_all_data()
+    if school_name in db_data:
+        school_info = db_data[school_name]
+        menu = school_info.get("menu", "") if isinstance(school_info, dict) else str(school_info)
+        items = [item.strip() for item in menu.split("\n") if item.strip()]
+        if items:
+            last_modified = school_info.get("last_modified", "") if isinstance(school_info, dict) else ""
+            return jsonify({
+                "success": True,
+                "school": school_name,
+                "dishes": items,
+                "source": "saved",
+                "source_desc": f"云端菜单（{last_modified}）" if last_modified else "云端菜单",
+                "confidence": "high",
+                "note": f"✅ 已加载「{school_name}」的云端菜单，共 {len(items)} 道菜品",
+                "dish_count": len(items)
+            })
+
+    # 数据库没有，回退到精选数据库
     if school_name in CURATED_DATABASE:
         info = CURATED_DATABASE[school_name]
-        # 根据置信度返回不同提示文案
         conf = info["confidence"]
         if conf == "low":
             note = "⚠️ 该学校数据置信度较低，菜品列表可能不准确，建议核实后再保存"

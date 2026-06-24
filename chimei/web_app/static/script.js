@@ -947,10 +947,10 @@ function showDishFetcher() {
     const skipBtn = document.getElementById('skipTaggingBtn');
     if (skipBtn) skipBtn.remove();
 
-    document.getElementById('fetcherSubtitle').textContent = `为「${currentSchool}」自动获取菜品数据`;
+    document.getElementById('fetcherSubtitle').textContent = `加载「${currentSchool}」的云端菜单`;
 
     const sourceInfo = document.getElementById('fetcherSourceInfo');
-    sourceInfo.innerHTML = '<p style="color:#666;">点击"开始获取"将从精选数据库中查找菜品数据。</p><p style="color:#999;font-size:0.85em;margin-top:5px;">获取后你可以逐条审核、增删菜品，确保数据准确。</p>';
+    sourceInfo.innerHTML = '<p style="color:#666;">点击"开始获取"将加载云端已保存的菜单数据。</p><p style="color:#999;font-size:0.85em;margin-top:5px;">你可以逐条审核、增删菜品，修改后保存会同步到云端。</p>';
 }
 
 function closeDishFetcher() {

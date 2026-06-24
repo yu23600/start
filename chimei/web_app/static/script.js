@@ -1,6 +1,5 @@
 // ========== 全局变量 ==========
 let currentSchool = '';
-let isAdvancedMode = false;
 let inputModalCallback = null;
 let universitiesList = []; // 大学列表
 let selectedSchool = null; // 向导中选中的学校
@@ -14,21 +13,15 @@ let schoolMenuItems = [];
 document.addEventListener('DOMContentLoaded', function() {
     loadUniversitiesList(); // 加载大学列表
     checkFirstTimeUse(); // 检查是否首次使用
-    setupEventListeners();
     loadAllergies(); // 恢复过敏设置
     loadUserGoal(); // 加载用户目标
-    startNutritionTips();
 });
 
 function setupEventListeners() {
-    // 回车键事件
+    // 回车键触发智能推荐
     document.addEventListener('keypress', function(e) {
         if (e.key === 'Enter') {
-            if (isAdvancedMode) {
-                smartRecommend();
-            } else {
-                randomRecommend();
-            }
+            smartRecommend();
         }
     });
 }
@@ -102,44 +95,6 @@ async function loadMenu() {
     } catch (error) {
         console.error('加载菜单失败:', error);
         showNotification('加载菜单失败', 'error');
-    }
-}
-
-async function saveMenu() {
-    if (!currentSchool) {
-        showNotification('请先选择一个学校！', 'warning');
-        return;
-    }
-    
-    const menu = document.getElementById('menuText').value.trim();
-    
-    if (!menu) {
-        if (!confirm('菜单内容为空，确定要保存吗？')) {
-            return;
-        }
-    }
-    
-    try {
-        const response = await fetch(`/api/menu/${encodeURIComponent(currentSchool)}`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ menu: menu })
-        });
-        
-        const data = await response.json();
-        
-        if (data.success) {
-            document.getElementById('menuText').value = data.menu;
-            document.getElementById('itemCount').textContent = `(${data.count} 项)`;
-            showNotification(`菜单已成功保存到 ${currentSchool}！`, 'success');
-        } else {
-            showNotification(data.message, 'error');
-        }
-    } catch (error) {
-        console.error('保存菜单失败:', error);
-        showNotification('保存菜单失败', 'error');
     }
 }
 
@@ -246,24 +201,103 @@ function showRenameSchoolDialog() {
     );
 }
 
-// ========== 模式切换 ==========
-function toggleMode() {
-    const simpleMode = document.getElementById('simpleMode');
-    const advancedMode = document.getElementById('advancedMode');
-    const toggleBtn = document.getElementById('modeToggleBtn');
-    
-    if (isAdvancedMode) {
-        // 切换回简洁模式
-        simpleMode.classList.add('active');
-        advancedMode.classList.remove('active');
-        toggleBtn.textContent = '切换到专业版模式';
-        isAdvancedMode = false;
+// ========== BMI 计算器 ==========
+function toggleBmiPanel() {
+    const panel = document.getElementById('bmiPanel');
+    const icon = document.getElementById('bmiToggleIcon');
+    if (panel.style.display === 'none') {
+        panel.style.display = 'block';
+        icon.textContent = '▼';
     } else {
-        // 切换到专业模式
-        simpleMode.classList.remove('active');
-        advancedMode.classList.add('active');
-        toggleBtn.textContent = '切换回简洁模式';
-        isAdvancedMode = true;
+        panel.style.display = 'none';
+        icon.textContent = '▶';
+    }
+}
+
+function calculateBMI() {
+    const height = parseFloat(document.getElementById('heightInput').value);
+    const weight = parseFloat(document.getElementById('weightInput').value);
+    const resultEl = document.getElementById('bmiResult');
+    
+    if (!height || !weight || height <= 0 || weight <= 0) {
+        resultEl.textContent = '请输入有效的身高和体重';
+        resultEl.style.color = '#e74c3c';
+        return;
+    }
+    
+    const bmi = weight / ((height / 100) ** 2);
+    let category = '';
+    let color = '';
+    
+    if (bmi < 18.5) {
+        category = '偏瘦';
+        color = '#3498db';
+    } else if (bmi < 24) {
+        category = '正常';
+        color = '#27ae60';
+    } else if (bmi < 28) {
+        category = '超重';
+        color = '#f39c12';
+    } else {
+        category = '肥胖';
+        color = '#e74c3c';
+    }
+    
+    resultEl.innerHTML = `BMI: <strong>${bmi.toFixed(1)}</strong> — <span style="color:${color}">${category}</span>`;
+    resultEl.style.color = '#333';
+}
+
+// ========== 菜单编辑器 ==========
+function showMenuEditor() {
+    if (!currentSchool) {
+        showNotification('请先选择一个学校！', 'warning');
+        return;
+    }
+    const menuText = document.getElementById('menuText');
+    document.getElementById('menuEditText').value = menuText ? menuText.value : '';
+    document.getElementById('menuEditorModal').classList.add('show');
+}
+
+function closeMenuEditor() {
+    document.getElementById('menuEditorModal').classList.remove('show');
+}
+
+async function saveMenuFromEditor() {
+    if (!currentSchool) {
+        showNotification('请先选择一个学校！', 'warning');
+        return;
+    }
+    
+    const menu = document.getElementById('menuEditText').value.trim();
+    
+    if (!menu) {
+        if (!confirm('菜单内容为空，确定要保存吗？')) return;
+    }
+    
+    try {
+        const response = await fetch(`/api/menu/${encodeURIComponent(currentSchool)}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ menu: menu })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            // 同步到隐藏的 textarea
+            const menuText = document.getElementById('menuText');
+            if (menuText) menuText.value = data.menu;
+            document.getElementById('itemCount').textContent = `(${data.count} 项)`;
+            // 更新 schoolMenuItems
+            schoolMenuItems = data.menu.split('\n').map(s => s.trim()).filter(s => s);
+            showNotification(`菜单已保存！`, 'success');
+            closeMenuEditor();
+        } else {
+            showNotification(data.message, 'error');
+        }
+    } catch (error) {
+        console.error('保存菜单失败:', error);
+        showNotification('保存菜单失败', 'error');
     }
 }
 
@@ -513,27 +547,6 @@ function toggleAllergyPanel() {
         panel.style.display = 'none';
         icon.textContent = '▶';
     }
-}
-
-// ========== 营养提示 ==========
-function startNutritionTips() {
-    const tips = [
-        "💡 选择困难？输入身高体重，让系统为你决定吃什么！",
-        "🥗 均衡饮食：每餐尽量包含蛋白质、蔬菜和主食",
-        "💧 每天喝足8杯水，保持身体水分平衡",
-        "🍎 一天一苹果，医生远离我 - 适当补充水果",
-        "🏃‍♂️ 饭后散步10分钟，有助于消化",
-        "😴 充足睡眠对新陈代谢至关重要",
-        "🍚 主食选择杂粮饭，营养更全面",
-        "🍵 饭后半小时再喝茶，避免影响铁吸收"
-    ];
-    
-    let currentIndex = 0;
-    
-    setInterval(() => {
-        currentIndex = (currentIndex + 1) % tips.length;
-        document.getElementById('nutritionTip').textContent = tips[currentIndex];
-    }, 30000);
 }
 
 // ========== 弹窗工具 ==========

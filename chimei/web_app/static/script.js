@@ -277,14 +277,18 @@ function toggleMode() {
 }
 
 // ========== 随机推荐 ==========
-async function randomRecommend() {
+async function randomRecommend(exclude = '') {
     if (!currentSchool) {
         showNotification('请先选择一个学校！', 'warning');
         return;
     }
     
     try {
-        const response = await fetch(`/api/recommend/random/${encodeURIComponent(currentSchool)}`);
+        let url = `/api/recommend/random/${encodeURIComponent(currentSchool)}`;
+        if (exclude) {
+            url += `?exclude=${encodeURIComponent(exclude)}`;
+        }
+        const response = await fetch(url);
         const data = await response.json();
         
         if (data.success) {
@@ -294,6 +298,11 @@ async function randomRecommend() {
                     <p style="font-size: 1.2em; color: #666; margin-bottom: 15px;">为 <strong>${data.school}</strong> 的你推荐：</p>
                     <p style="font-size: 2em; color: #11998e; font-weight: bold; margin: 20px 0;">✅ ${data.result}</p>
                     <p style="font-size: 1.1em; color: #888; margin-top: 20px;">🍽️ 用餐愉快！</p>
+                </div>
+                <div style="text-align: center; margin-top: 20px;">
+                    <button onclick="randomRecommend('${data.result.replace(/'/g, "\\'")}')" class="btn btn-info" style="padding: 12px 28px; font-size: 1em; border-radius: 25px;">
+                        🔄 不喜欢？换一个
+                    </button>
                 </div>
             `);
         } else {

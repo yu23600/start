@@ -830,7 +830,15 @@ def random_recommend(school_name):
     items = [item.strip() for item in menu.split("\n") if item.strip()]
     if not items:
         return jsonify({"success": False, "message": "没有可用菜品"}), 400
-    result = random.choice(items)
+    # 排除用户不想要的菜品
+    exclude = request.args.get('exclude', '').strip()
+    if exclude:
+        candidates = [item for item in items if item != exclude]
+        if not candidates:
+            candidates = items  # 只剩一个菜，无法排除
+    else:
+        candidates = items
+    result = random.choice(candidates)
     return jsonify({
         "success": True,
         "result": result,

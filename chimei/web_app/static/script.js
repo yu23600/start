@@ -8,6 +8,7 @@ let wizardGoal = ''; // 向导中临时选中的目标
 let todayMeals = { breakfast: [], lunch: [], dinner: [] };
 let currentMealTab = 'breakfast';
 let schoolMenuItems = [];
+let excludedDishes = []; // 已推荐过的菜品，避免重复
 
 // ========== 初始化 ==========
 document.addEventListener('DOMContentLoaded', function() {
@@ -341,7 +342,7 @@ async function randomRecommend(exclude = '') {
 }
 
 // ========== 智能推荐 ==========
-async function smartRecommend() {
+async function smartRecommend(excludeList) {
     if (!currentSchool) {
         showNotification('请先选择一个学校！', 'warning');
         return;
@@ -368,6 +369,9 @@ async function smartRecommend() {
         showNotification('请先选择一个饮食目标！', 'warning');
         return;
     }
+
+    // 合并传入的排除列表和全局排除列表
+    const allExclude = [...new Set([...(excludeList || []), ...excludedDishes])];
     
     try {
         const response = await fetch('/api/recommend/smart', {
@@ -378,13 +382,21 @@ async function smartRecommend() {
             body: JSON.stringify({
                 school_name: currentSchool,
                 goal: goal,
-                allergies: allergies
+                allergies: allergies,
+                exclude: allExclude
             })
         });
         
         const data = await response.json();
         
         if (data.success) {
+            // 记录已推荐的菜品
+            excludedDishes.push(data.result);
+            // 防止排除列表无限增长，保留最近20个
+            if (excludedDishes.length > 20) {
+                excludedDishes = excludedDishes.slice(-20);
+            }
+
             let detailsHtml = '';
             if (data.details && data.details.length > 0) {
                 detailsHtml = '<div style="margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px;">' +
@@ -394,6 +406,8 @@ async function smartRecommend() {
             
             const goalLabel = data.goal || '';
             const goalPrefix = goalLabel ? `根据你「${goalLabel}」的目标，` : '';
+            const escapedResult = data.result.replace(/'/g, "\\'");
+            const escapedExclude = JSON.stringify(excludedDishes).replace(/"/g, '&quot;');
             
             showModal(`
                 <h2 style="color: #667eea; margin-bottom: 20px;">🧠 智能推荐结果</h2>
@@ -402,6 +416,11 @@ async function smartRecommend() {
                     <p style="font-size: 2.2em; color: #11998e; font-weight: bold; margin: 20px 0;">✅ ${data.result}</p>
                     ${detailsHtml}
                     <p style="font-size: 1.1em; color: #888; margin-top: 20px;">🍽️ 希望你用餐愉快！</p>
+                </div>
+                <div style="text-align: center; margin-top: 20px;">
+                    <button onclick="smartRecommend(['${escapedResult}'])" class="btn btn-info" style="padding: 12px 28px; font-size: 1em; border-radius: 25px;">
+                        🔄 不喜欢？换一批
+                    </button>
                 </div>
             `);
         } else {

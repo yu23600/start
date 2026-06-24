@@ -874,6 +874,7 @@ def smart_recommend():
     school_name = request.json.get('school_name', '')
     goal = request.json.get('goal', '')  # cutting / bulking / healthy
     allergies = request.json.get('allergies', [])  # 海鲜过敏/花生过敏/乳糖不耐
+    exclude = request.json.get('exclude', [])  # 已推荐过的菜品，不再推荐
 
     if school_name not in data:
         return jsonify({"success": False, "message": "学校不存在"}), 404
@@ -885,6 +886,13 @@ def smart_recommend():
     items = [item.strip() for item in menu.split("\n") if item.strip()]
     if not items:
         return jsonify({"success": False, "message": "没有可用菜品"}), 400
+
+    # 排除已推荐过的菜品
+    if exclude:
+        items = [item for item in items if item not in exclude]
+        if not items:
+            # 全部排除完了，重置为全部菜品
+            items = [item.strip() for item in menu.split("\n") if item.strip()]
 
     prefer_tags = []
     avoid_tags = []

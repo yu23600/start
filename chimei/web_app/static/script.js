@@ -4,32 +4,23 @@ let isAdvancedMode = false;
 let inputModalCallback = null;
 let universitiesList = []; // 大学列表
 let selectedSchool = null; // 向导中选中的学校
+let userGoal = '';  // 用户目标: cutting / bulking / healthy / ''
+let wizardGoal = ''; // 向导中临时选中的目标
+let todayMeals = { breakfast: [], lunch: [], dinner: [] };
+let currentMealTab = 'lunch';
+let schoolMenuItems = [];
 
 // ========== 初始化 ==========
 document.addEventListener('DOMContentLoaded', function() {
     loadUniversitiesList(); // 加载大学列表
     checkFirstTimeUse(); // 检查是否首次使用
     setupEventListeners();
-    loadBodyData(); // 恢复缓存的身体数据
+    loadAllergies(); // 恢复过敏设置
+    loadUserGoal(); // 加载用户目标
     startNutritionTips();
 });
 
 function setupEventListeners() {
-    // BMI自动计算 + 自动保存
-    document.getElementById('heightInput').addEventListener('input', function() { autoCalculateBMI(); saveBodyData(); });
-    document.getElementById('weightInput').addEventListener('input', function() { autoCalculateBMI(); saveBodyData(); });
-    document.getElementById('ageInput').addEventListener('change', saveBodyData);
-
-    // 性别切换时保存
-    document.querySelectorAll('input[name="gender"]').forEach(function(radio) {
-        radio.addEventListener('change', saveBodyData);
-    });
-
-    // 状态复选框变化时保存
-    document.querySelectorAll('.checkbox-grid input[type="checkbox"]').forEach(function(cb) {
-        cb.addEventListener('change', saveBodyData);
-    });
-
     // 回车键事件
     document.addEventListener('keypress', function(e) {
         if (e.key === 'Enter') {
@@ -321,33 +312,26 @@ async function smartRecommend() {
         return;
     }
     
-    const age = parseInt(document.getElementById('ageInput').value) || 18;
-    const gender = document.querySelector('input[name="gender"]:checked').value;
-    const height = parseFloat(document.getElementById('heightInput').value) || 0;
-    const weight = parseFloat(document.getElementById('weightInput').value) || 0;
-    
-    // 收集选中的状态
-    const conditions = [];
-    const conditionMap = {
-        'cond_child': '儿童',
-        'cond_period': '经期',
-        'cond_cold': '感冒',
-        'cond_stomach': '肠胃不适',
-        'cond_exercise': '运动后',
-        'cond_underweight': '低体重',
-        'cond_overweight': '超重',
-        'cond_vegetarian': '素食',
-        'cond_fire': '上火',
-        'cond_muscle': '增肌',
-        'cond_seafood_allergy': '海鲜过敏',
-        'cond_peanut_allergy': '花生过敏',
-        'cond_lactose': '乳糖不耐'
+    // 收集过敏信息
+    const allergies = [];
+    const allergyIds = {
+        'allergy_seafood': '海鲜过敏',
+        'allergy_peanut': '花生过敏',
+        'allergy_lactose': '乳糖不耐'
     };
-    
-    for (const [id, name] of Object.entries(conditionMap)) {
-        if (document.getElementById(id).checked) {
-            conditions.push(name);
+    for (const [id, name] of Object.entries(allergyIds)) {
+        const el = document.getElementById(id);
+        if (el && el.checked) {
+            allergies.push(name);
         }
+    }
+    
+    // 如果没有目标，提示用户先选
+    const goal = userGoal || localStorage.getItem('user_goal') || '';
+    if (!goal) {
+        showGoalSwitcher();
+        showNotification('请先选择一个饮食目标！', 'warning');
+        return;
     }
     
     try {
@@ -358,11 +342,8 @@ async function smartRecommend() {
             },
             body: JSON.stringify({
                 school_name: currentSchool,
-                age: age,
-                gender: gender,
-                height: height,
-                weight: weight,
-                conditions: conditions
+                goal: goal,
+                allergies: allergies
             })
         });
         
@@ -376,18 +357,15 @@ async function smartRecommend() {
                     '</div>';
             }
             
-            let bmiInfo = '';
-            if (data.bmi) {
-                bmiInfo = `<p style="margin-top: 10px; color: #888; font-size: 0.9em;">你的BMI值: ${data.bmi}</p>`;
-            }
+            const goalLabel = data.goal || '';
+            const goalPrefix = goalLabel ? `根据你「${goalLabel}」的目标，` : '';
             
             showModal(`
                 <h2 style="color: #667eea; margin-bottom: 20px;">🧠 智能推荐结果</h2>
                 <div style="text-align: center; padding: 30px; background: linear-gradient(135deg, #fff9e6 0%, #fff3cd 100%); border-radius: 10px;">
-                    <p style="font-size: 1.1em; color: #666; margin-bottom: 15px;">根据你的身体状况，为 <strong>${currentSchool}</strong> 的你决定：</p>
+                    <p style="font-size: 1.1em; color: #666; margin-bottom: 15px;">${goalPrefix}为 <strong>${currentSchool}</strong> 的你推荐：</p>
                     <p style="font-size: 2.2em; color: #11998e; font-weight: bold; margin: 20px 0;">✅ ${data.result}</p>
                     ${detailsHtml}
-                    ${bmiInfo}
                     <p style="font-size: 1.1em; color: #888; margin-top: 20px;">🍽️ 希望你用餐愉快！</p>
                 </div>
             `);
@@ -400,115 +378,140 @@ async function smartRecommend() {
     }
 }
 
-// ========== BMI计算 ==========
-async function calculateBMI() {
-    const height = parseFloat(document.getElementById('heightInput').value);
-    const weight = parseFloat(document.getElementById('weightInput').value);
-    
-    if (!height || !weight || height <= 0 || weight <= 0) {
-        showNotification('请输入有效的身高和体重！', 'warning');
-        return;
-    }
-    
-    try {
-        const response = await fetch('/api/bmi/calculate', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                height: height,
-                weight: weight
-            })
-        });
-        
-        const data = await response.json();
-        
-        if (data.success) {
-            document.getElementById('bmiResult').textContent = `BMI: ${data.bmi}`;
-            
-            // 根据BMI自动勾选状态
-            if (data.bmi < 18.5) {
-                document.getElementById('cond_underweight').checked = true;
-                document.getElementById('cond_overweight').checked = false;
-            } else if (data.bmi >= 24) {
-                document.getElementById('cond_overweight').checked = true;
-                document.getElementById('cond_underweight').checked = false;
-            } else {
-                document.getElementById('cond_underweight').checked = false;
-                document.getElementById('cond_overweight').checked = false;
-            }
-            
-            showModal(`
-                <h2 style="color: #667eea; margin-bottom: 20px;">📊 BMI计算结果</h2>
-                <div style="text-align: center; padding: 30px; background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); border-radius: 10px;">
-                    <p style="font-size: 3em; font-weight: bold; color: #1976d2; margin: 20px 0;">${data.bmi}</p>
-                    <p style="font-size: 1.3em; color: #333; margin: 15px 0;">分类: <strong>${data.category}</strong></p>
-                    <p style="font-size: 1em; color: #666; margin-top: 15px;">${data.suggestion}</p>
-                </div>
-            `);
-        } else {
-            showNotification(data.message, 'warning');
-        }
-    } catch (error) {
-        console.error('BMI计算失败:', error);
-        showNotification('计算失败', 'error');
+// ========== 目标管理 ==========
+function loadUserGoal() {
+    const saved = localStorage.getItem('user_goal');
+    if (saved) {
+        userGoal = saved;
+        updateGoalStatusBar();
+        updateGoalCards();
     }
 }
 
-function autoCalculateBMI() {
-    const heightText = document.getElementById('heightInput').value.trim();
-    const weightText = document.getElementById('weightInput').value.trim();
-    
-    if (heightText && weightText) {
-        const height = parseFloat(heightText);
-        const weight = parseFloat(weightText);
-        
-        if (height > 0 && weight > 0) {
-            const bmi = weight / ((height / 100) ** 2);
-            document.getElementById('bmiResult').textContent = `BMI: ${bmi.toFixed(1)}`;
-        }
-    }
-}
-
-// ========== 身体数据缓存 ==========
-function saveBodyData() {
-    const bodyData = {
-        age: document.getElementById('ageInput').value,
-        gender: document.querySelector('input[name="gender"]:checked')?.value || '女',
-        height: document.getElementById('heightInput').value,
-        weight: document.getElementById('weightInput').value,
-        conditions: {}
+function updateGoalStatusBar() {
+    const iconEl = document.getElementById('goalStatusIcon');
+    const textEl = document.getElementById('goalStatusText');
+    const goalMap = {
+        'cutting': { icon: '🔥', text: '减脂期' },
+        'bulking': { icon: '💪', text: '增肌期' },
+        'healthy': { icon: '🌿', text: '保持健康' }
     };
-    // 保存所有复选框状态
-    document.querySelectorAll('.checkbox-grid input[type="checkbox"]').forEach(function(cb) {
-        bodyData.conditions[cb.id] = cb.checked;
-    });
-    localStorage.setItem('body_data', JSON.stringify(bodyData));
+    if (userGoal && goalMap[userGoal]) {
+        iconEl.textContent = goalMap[userGoal].icon;
+        textEl.textContent = goalMap[userGoal].text;
+    } else {
+        iconEl.textContent = '🎯';
+        textEl.textContent = '点击设置饮食目标';
+    }
 }
 
-function loadBodyData() {
-    const saved = localStorage.getItem('body_data');
+function updateGoalCards() {
+    document.querySelectorAll('#goalCards .goal-card').forEach(card => {
+        card.classList.remove('selected');
+        if (card.dataset.goal === userGoal) {
+            card.classList.add('selected');
+        }
+    });
+}
+
+function selectGoalFromCards(goal) {
+    wizardGoal = goal;
+    document.querySelectorAll('#goalCards .goal-card').forEach(card => {
+        card.classList.remove('selected');
+        if (card.dataset.goal === goal) {
+            card.classList.add('selected');
+        }
+    });
+    // 直接保存
+    saveGoal(goal);
+}
+
+async function saveGoal(goal) {
+    const user = getMealUser();
+    if (!user) return;
+    try {
+        const resp = await fetch('/api/meal-user/goal', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: user, goal: goal })
+        });
+        const data = await resp.json();
+        if (data.success) {
+            userGoal = goal;
+            localStorage.setItem('user_goal', goal);
+            updateGoalStatusBar();
+            updateGoalCards();
+        }
+    } catch (e) {
+        console.error('保存目标失败:', e);
+    }
+}
+
+function showGoalSwitcher() {
+    document.getElementById('goalWizardModal').classList.add('show');
+    wizardGoal = userGoal;
+    document.querySelectorAll('#goalWizardModal .goal-wizard-card').forEach(card => {
+        card.classList.remove('selected');
+        if (card.dataset.goal === userGoal) {
+            card.classList.add('selected');
+        }
+    });
+    document.getElementById('goalConfirmBtn').disabled = !userGoal;
+}
+
+function pickGoalWizard(goal) {
+    wizardGoal = goal;
+    document.querySelectorAll('#goalWizardModal .goal-wizard-card').forEach(card => {
+        card.classList.remove('selected');
+        if (card.dataset.goal === goal) {
+            card.classList.add('selected');
+        }
+    });
+    document.getElementById('goalConfirmBtn').disabled = false;
+}
+
+function confirmGoalWizard() {
+    if (wizardGoal) {
+        saveGoal(wizardGoal);
+    }
+    document.getElementById('goalWizardModal').classList.remove('show');
+}
+
+function skipGoalWizard() {
+    document.getElementById('goalWizardModal').classList.remove('show');
+}
+
+// ========== 过敏管理 ==========
+function saveAllergies() {
+    const allergies = [];
+    if (document.getElementById('allergy_seafood')?.checked) allergies.push('海鲜过敏');
+    if (document.getElementById('allergy_peanut')?.checked) allergies.push('花生过敏');
+    if (document.getElementById('allergy_lactose')?.checked) allergies.push('乳糖不耐');
+    localStorage.setItem('user_allergies', JSON.stringify(allergies));
+}
+
+function loadAllergies() {
+    const saved = localStorage.getItem('user_allergies');
     if (!saved) return;
     try {
-        const data = JSON.parse(saved);
-        if (data.age) document.getElementById('ageInput').value = data.age;
-        if (data.gender) {
-            const radio = document.querySelector(`input[name="gender"][value="${data.gender}"]`);
-            if (radio) radio.checked = true;
-        }
-        if (data.height) document.getElementById('heightInput').value = data.height;
-        if (data.weight) document.getElementById('weightInput').value = data.weight;
-        if (data.conditions) {
-            for (const [id, checked] of Object.entries(data.conditions)) {
-                const el = document.getElementById(id);
-                if (el) el.checked = checked;
-            }
-        }
-        // 恢复后自动计算BMI
-        autoCalculateBMI();
+        const allergies = JSON.parse(saved);
+        if (allergies.includes('海鲜过敏')) document.getElementById('allergy_seafood').checked = true;
+        if (allergies.includes('花生过敏')) document.getElementById('allergy_peanut').checked = true;
+        if (allergies.includes('乳糖不耐')) document.getElementById('allergy_lactose').checked = true;
     } catch (e) {
-        console.error('加载缓存身体数据失败:', e);
+        console.error('加载过敏设置失败:', e);
+    }
+}
+
+function toggleAllergyPanel() {
+    const panel = document.getElementById('allergyPanel');
+    const icon = document.getElementById('allergyToggleIcon');
+    if (panel.style.display === 'none') {
+        panel.style.display = 'block';
+        icon.textContent = '▼';
+    } else {
+        panel.style.display = 'none';
+        icon.textContent = '▶';
     }
 }
 
@@ -1454,6 +1457,8 @@ async function startupMealLogin() {
         const user = await tryAutoLogin();
         if (user) {
             updateMealUserDisplay();
+            // 检查是否需要设置目标
+            await checkAndShowGoalWizard();
             return;
         }
     }
@@ -1462,6 +1467,37 @@ async function startupMealLogin() {
     const user = await showMealLoginDialog();
     if (user) {
         updateMealUserDisplay();
+        // 登录后检查是否需要设置目标
+        await checkAndShowGoalWizard();
+    }
+}
+
+async function checkAndShowGoalWizard() {
+    // 先检查本地是否有目标
+    const localGoal = localStorage.getItem('user_goal');
+    if (localGoal) {
+        userGoal = localGoal;
+        updateGoalStatusBar();
+        updateGoalCards();
+        return;
+    }
+    // 从服务器获取目标
+    const user = getMealUser();
+    if (!user) return;
+    try {
+        const resp = await fetch(`/api/meal-user/goal?username=${encodeURIComponent(user)}`);
+        const data = await resp.json();
+        if (data.success && data.goal) {
+            userGoal = data.goal;
+            localStorage.setItem('user_goal', data.goal);
+            updateGoalStatusBar();
+            updateGoalCards();
+        } else {
+            // 没有目标，弹出目标选择向导
+            showGoalSwitcher();
+        }
+    } catch (e) {
+        console.error('获取目标失败:', e);
     }
 }
 
@@ -1721,6 +1757,12 @@ function renderReport(data) {
     </div>`;
     html += '</div>';
 
+    // 目标进度（如果有目标数据）
+    if (data.goal && data.daily_goal_metric) {
+        html += '<div class="report-section-title">🎯 本周目标趋势</div>';
+        html += '<div class="report-chart-container"><canvas id="goalTrendChart" width="400" height="200"></canvas></div>';
+    }
+
     // 打卡日历
     html += '<div class="report-section-title">📅 打卡日历</div>';
     html += '<div class="report-calendar">';
@@ -1789,6 +1831,200 @@ function renderReport(data) {
         </div>`;
     }
     html += '</div>';
+
+    // 习惯洞察
+    if (data.insights && data.insights.length > 0) {
+        html += '<div class="report-section-title">💡 饮食洞察</div>';
+        html += '<div class="insights-container">';
+        for (const insight of data.insights) {
+            html += `<div class="insight-card">${insight}</div>`;
+        }
+        html += '</div>';
+    }
+
+    content.innerHTML = html;
+
+    // 渲染 Chart.js 折线图
+    if (data.goal && data.daily_goal_metric) {
+        renderGoalTrendChart(data);
+    }
+}
+
+function renderGoalTrendChart(data) {
+    const ctx = document.getElementById('goalTrendChart');
+    if (!ctx) return;
+
+    const labels = data.daily_summary.map(d => d.date.slice(5)); // MM-DD
+    const metricData = data.daily_goal_metric;
+
+    let label = '打卡餐数';
+    let borderColor = '#667eea';
+    let backgroundColor = 'rgba(102, 126, 234, 0.2)';
+
+    if (data.goal === 'cutting') {
+        label = '不健康菜品数';
+        borderColor = '#ee9ca7';
+        backgroundColor = 'rgba(238, 156, 167, 0.2)';
+    } else if (data.goal === 'bulking') {
+        label = '高蛋白菜品数';
+        borderColor = '#11998e';
+        backgroundColor = 'rgba(17, 153, 142, 0.2)';
+    }
+
+    new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: label,
+                data: metricData,
+                borderColor: borderColor,
+                backgroundColor: backgroundColor,
+                fill: true,
+                tension: 0.4,
+                pointRadius: 5,
+                pointHoverRadius: 7
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: true,
+                    position: 'top'
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        stepSize: 1
+                    }
+                }
+            }
+        }
+    });
+}
+
+// ========== 每日简报 ==========
+async function showDailyBriefing() {
+    const user = getMealUser();
+    if (!user) {
+        showNotification('请先登录', 'warning');
+        return;
+    }
+
+    document.getElementById('briefingModal').classList.add('show');
+    const content = document.getElementById('briefingContent');
+    content.innerHTML = '<p style="text-align:center;color:#999;padding:30px;">加载中...</p>';
+
+    try {
+        const resp = await fetch(`/api/meal-log/daily-briefing?username=${encodeURIComponent(user)}`);
+        const data = await resp.json();
+        if (data.success) {
+            renderBriefing(data);
+        } else {
+            content.innerHTML = '<p style="color:#e74c3c;text-align:center;">加载简报失败</p>';
+        }
+    } catch (e) {
+        console.error('加载简报失败:', e);
+        content.innerHTML = '<p style="color:#e74c3c;text-align:center;">加载简报失败</p>';
+    }
+}
+
+function closeBriefing() {
+    document.getElementById('briefingModal').classList.remove('show');
+}
+
+function renderBriefing(data) {
+    const content = document.getElementById('briefingContent');
+
+    if (data.total_dishes === 0) {
+        content.innerHTML = `
+            <div class="briefing-empty">
+                <span class="empty-icon">🍽️</span>
+                <p>${data.message || '今天还没有打卡记录'}</p>
+            </div>`;
+        return;
+    }
+
+    let html = '';
+
+    // 评分卡片
+    const scoreColor = data.score >= 80 ? '#11998e' : data.score >= 60 ? '#f39c12' : '#e74c3c';
+    html += `<div class="briefing-score-card" style="background: linear-gradient(135deg, ${scoreColor}22, ${scoreColor}44);">
+        <div class="briefing-score" style="color: ${scoreColor};">${data.score}</div>
+        <div class="briefing-score-label">今日饮食评分</div>
+    </div>`;
+
+    // 目标提示
+    if (data.goal) {
+        html += `<div class="briefing-goal">当前目标：${data.goal}</div>`;
+    }
+
+    // 主要建议
+    if (data.tip) {
+        html += `<div class="briefing-tip">💡 ${data.tip}</div>`;
+    }
+
+    // 详细数据
+    html += '<div class="briefing-details">';
+    html += `<div class="briefing-detail-row">
+        <span>总菜品数</span>
+        <span class="briefing-detail-value">${data.total_dishes}</span>
+    </div>`;
+    html += `<div class="briefing-detail-row">
+        <span>打卡餐数</span>
+        <span class="briefing-detail-value">${data.meals_logged}/3</span>
+    </div>`;
+
+    if (data.protein_count !== undefined) {
+        html += `<div class="briefing-detail-row">
+            <span>高蛋白菜品</span>
+            <span class="briefing-detail-value">${data.protein_count} 次</span>
+        </div>`;
+    }
+    if (data.unhealthy_count !== undefined) {
+        html += `<div class="briefing-detail-row">
+            <span>高油菜品</span>
+            <span class="briefing-detail-value" style="color: ${data.unhealthy_count > 2 ? '#e74c3c' : '#666'};">${data.unhealthy_count} 次</span>
+        </div>`;
+    }
+    if (data.vegetable_count !== undefined) {
+        html += `<div class="briefing-detail-row">
+            <span>蔬菜菜品</span>
+            <span class="briefing-detail-value" style="color: #11998e;">${data.vegetable_count} 次</span>
+        </div>`;
+    }
+    html += '</div>';
+
+    // 烹饪方式分布
+    if (data.cooking_methods && Object.keys(data.cooking_methods).length > 0) {
+        html += '<div class="briefing-section-title">烹饪方式分布</div>';
+        html += '<div class="briefing-cooking-methods">';
+        const maxCount = Math.max(...Object.values(data.cooking_methods));
+        for (const [method, count] of Object.entries(data.cooking_methods)) {
+            const pct = (count / maxCount * 100).toFixed(0);
+            html += `<div class="cooking-method-row">
+                <span class="cooking-method-label">${method}</span>
+                <div class="cooking-method-bar">
+                    <div class="cooking-method-fill" style="width:${pct}%"></div>
+                </div>
+                <span class="cooking-method-count">${count}</span>
+            </div>`;
+        }
+        html += '</div>';
+    }
+
+    // 额外建议
+    if (data.details && data.details.length > 0) {
+        html += '<div class="briefing-extra-tips">';
+        for (const detail of data.details) {
+            html += `<div class="briefing-extra-tip">• ${detail}</div>`;
+        }
+        html += '</div>';
+    }
 
     content.innerHTML = html;
 }

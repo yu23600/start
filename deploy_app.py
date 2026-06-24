@@ -35,6 +35,24 @@ if SUPABASE_URL and SUPABASE_ANON_KEY:
     except Exception as e:
         print(f"️ Supabase 连接失败，将使用本地JSON存储: {e}")
 
+# ========== Supabase 自动迁移 ==========
+def migrate_supabase():
+    """自动给 Supabase 表添加缺失的列"""
+    if not supabase_client:
+        return
+    try:
+        # 给 meal_users 表添加 goal 列（如果不存在）
+        supabase_client.rpc('exec_sql', {
+            'sql': "ALTER TABLE meal_users ADD COLUMN IF NOT EXISTS goal TEXT DEFAULT '';"
+        }).execute()
+        print("✅ Supabase 迁移完成（goal 列）")
+    except Exception as e:
+        # RPC 可能不存在，尝试直接 REST 方式（忽略错误，列可能已存在）
+        print(f"⚠️ Supabase 自动迁移跳过: {e}")
+
+if SUPABASE_URL and SUPABASE_ANON_KEY:
+    migrate_supabase()
+
 # ========== 基础路径配置 ==========
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -392,7 +410,8 @@ def load_meal_users():
                 data[row['username']] = {
                     "password_hash": row['password_hash'],
                     "salt": row['salt'],
-                    "created_at": row['created_at']
+                    "created_at": row['created_at'],
+                    "goal": row.get('goal', '') or ''
                 }
             return data
         except Exception as e:
@@ -418,7 +437,8 @@ def save_meal_users(users):
                     "username": username,
                     "password_hash": info.get('password_hash', ''),
                     "salt": info.get('salt', ''),
-                    "created_at": info.get('created_at', datetime.datetime.now().isoformat())
+                    "created_at": info.get('created_at', datetime.datetime.now().isoformat()),
+                    "goal": info.get('goal', '')
                 })
             if rows:
                 supabase_client.table('meal_users').upsert(rows, on_conflict='username').execute()
@@ -855,14 +875,11 @@ def random_recommend(school_name):
 
 @app.route('/api/recommend/smart', methods=['POST'])
 def smart_recommend():
-    """智能推荐"""
+    """智能推荐（基于目标）"""
     data = load_all_data()
     school_name = request.json.get('school_name', '')
-    age = request.json.get('age', 18)
-    gender = request.json.get('gender', '女')
-    height = request.json.get('height', 0)
-    weight = request.json.get('weight', 0)
-    conditions = request.json.get('conditions', [])
+    goal = request.json.get('goal', '')  # cutting / bulking / healthy
+    allergies = request.json.get('allergies', [])  # 海鲜过敏/花生过敏/乳糖不耐
 
     if school_name not in data:
         return jsonify({"success": False, "message": "学校不存在"}), 404
@@ -878,89 +895,42 @@ def smart_recommend():
 
     prefer_tags = []
     avoid_tags = []
-    condition_names = []
+    goal_name = ""
 
-    if age < 12 or "儿童" in conditions:
-        prefer_tags.extend(NUTRITION_RULES["儿童(<12岁)"]["prefer"])
-        avoid_tags.extend(NUTRITION_RULES["儿童(<12岁)"]["avoid"])
-        condition_names.append("儿童")
+    # 根据目标设置偏好
+    if goal == 'cutting':
+        prefer_tags.extend(["清蒸", "凉拌", "杂粮", "蔬菜", "鸡胸", "豆腐", "低脂", "高纤维", "清淡",
+                            "西兰花", "黄瓜", "番茄", "芹菜", "冬瓜", "苦瓜"])
+        avoid_tags.extend(["红烧肉", "炸鸡", "蛋糕", "含糖饮料", "肥肉", "油炸", "高糖", "重口味",
+                           "奶油", "芝士", "糖醋", "油爆", "干煸"])
+        goal_name = "减脂期"
+    elif goal == 'bulking':
+        prefer_tags.extend(["高蛋白", "鸡胸", "牛肉", "鱼", "鸡蛋", "牛奶", "豆腐", "蛋白质", "碳水",
+                            "坚果", "香蕉", "复合碳水"])
+        goal_name = "增肌期"
+    elif goal == 'healthy':
+        prefer_tags.extend(["清蒸", "凉拌", "蔬菜", "豆腐", "鸡蛋", "清淡", "易消化",
+                            "西兰花", "番茄", "胡萝卜", "菌菇"])
+        goal_name = "保持健康"
 
-    if gender == "女" and "经期" in conditions:
-        prefer_tags.extend(NUTRITION_RULES["女性经期"]["prefer"])
-        avoid_tags.extend(NUTRITION_RULES["女性经期"]["avoid"])
-        condition_names.append("女性经期")
+    # 过敏安全过滤（始终生效）
+    if "海鲜过敏" in allergies:
+        avoid_tags.extend(["虾", "蟹", "鱼", "贝", "牡蛎", "扇贝", "蛤", "鱿鱼", "章鱼", "海鱼", "海鲜", "三文鱼", "龙利鱼"])
+    if "花生过敏" in allergies:
+        avoid_tags.extend(["花生", "花生酱", "芝麻"])
+    if "乳糖不耐" in allergies:
+        avoid_tags.extend(["牛奶", "奶油", "芝士", "酸奶", "全脂奶", "脱脂奶"])
 
-    bmi_value = None
-    if height > 0 and weight > 0:
-        bmi_value = weight / ((height / 100) ** 2)
-
-    is_underweight = "低体重" in conditions or (bmi_value is not None and bmi_value < 18.5)
-    is_overweight = "超重" in conditions or (bmi_value is not None and bmi_value >= 24)
-
-    if is_underweight:
-        prefer_tags.extend(NUTRITION_RULES["低体重(BMI<18.5)"]["prefer"])
-        condition_names.append("低体重")
-    elif is_overweight:
-        prefer_tags.extend(NUTRITION_RULES["超重(BMI>=24)"]["prefer"])
-        avoid_tags.extend(NUTRITION_RULES["超重(BMI>=24)"]["avoid"])
-        condition_names.append("超重")
-
-    if "感冒" in conditions:
-        prefer_tags.extend(NUTRITION_RULES["感冒"]["prefer"])
-        avoid_tags.extend(NUTRITION_RULES["感冒"]["avoid"])
-        condition_names.append("感冒")
-
-    if "肠胃不适" in conditions:
-        prefer_tags.extend(NUTRITION_RULES["肠胃不适"]["prefer"])
-        avoid_tags.extend(NUTRITION_RULES["肠胃不适"]["avoid"])
-        condition_names.append("肠胃不适")
-
-    if "运动后" in conditions:
-        prefer_tags.extend(NUTRITION_RULES["运动后"]["prefer"])
-        condition_names.append("运动后")
-
-    if "上火" in conditions:
-        prefer_tags.extend(NUTRITION_RULES["上火"]["prefer"])
-        avoid_tags.extend(NUTRITION_RULES["上火"]["avoid"])
-        condition_names.append("上火")
-
-    if "增肌" in conditions:
-        prefer_tags.extend(NUTRITION_RULES["增肌"]["prefer"])
-        condition_names.append("增肌")
-
-    if "海鲜过敏" in conditions:
-        avoid_tags.extend(NUTRITION_RULES["海鲜过敏"]["avoid"])
-        condition_names.append("海鲜过敏")
-
-    if "花生过敏" in conditions:
-        avoid_tags.extend(NUTRITION_RULES["花生过敏"]["avoid"])
-        condition_names.append("花生过敏")
-
-    if "乳糖不耐" in conditions:
-        avoid_tags.extend(NUTRITION_RULES["乳糖不耐"]["avoid"])
-        condition_names.append("乳糖不耐")
-
-    if "素食" in conditions:
-        prefer_tags.extend(NUTRITION_RULES["素食"]["prefer"])
-        avoid_tags.extend(NUTRITION_RULES["素食"]["avoid"])
-        condition_names.append("素食")
-
-    # 过滤不适合的菜品（使用tag_matches避免误伤）
     filtered_items = []
     filtered_reasons = {}
     for item in items:
         skip = False
         reason = ""
-        # 素食特殊处理：使用dish_has_meat检测肉类
-        if "素食" in conditions and dish_has_meat(item):
-            skip = True
-            reason = "素食模式：含肉类"
-        else:
-            for tag in avoid_tags:
-                if tag_matches(tag, item):
-                    skip = True
-                    reason = f"含有禁忌: {tag}"
-                    break
+        for tag in avoid_tags:
+            if tag in item:
+                skip = True
+                reason = f"含有禁忌: {tag}"
+                break
         if skip:
             filtered_reasons[item] = reason
             continue
@@ -1005,9 +975,12 @@ def smart_recommend():
         max_score = scored_items[0][1]
         top_items = [item for item, score in scored_items if score == max_score]
         result = random.choice(top_items)
-        recommendation_text = f"根据你的身体状况，为 {school_name} 的你决定：\n\n✅ {result}\n\n"
-        if condition_names:
-            details.append(f"• 考虑了你的状态: {', '.join(condition_names)}")
+        if goal_name:
+            recommendation_text = f"根据你「{goal_name}」的目标，为 {school_name} 的你推荐：\n\n✅ {result}\n\n"
+        else:
+            recommendation_text = f"为 {school_name} 的你推荐：\n\n✅ {result}\n\n"
+        if goal_name:
+            details.append(f"• 目标: {goal_name}")
         if result in match_details:
             matched_tags = match_details[result]
             details.append(f"• 匹配营养需求: {', '.join(matched_tags)}")
@@ -1017,9 +990,12 @@ def smart_recommend():
     else:
         if filtered_items:
             result = random.choice(filtered_items)
-            recommendation_text = f"根据你的身体状况，为 {school_name} 的你决定：\n\n✅ {result}\n\n"
-            if condition_names:
-                details.append(f"• 考虑了你的状态: {', '.join(condition_names)}")
+            if goal_name:
+                recommendation_text = f"根据你「{goal_name}」的目标，为 {school_name} 的你推荐：\n\n✅ {result}\n\n"
+            else:
+                recommendation_text = f"为 {school_name} 的你推荐：\n\n✅ {result}\n\n"
+            if goal_name:
+                details.append(f"• 目标: {goal_name}")
             if filtered_reasons:
                 details.append(f"• 已排除 {len(filtered_reasons)} 个不适合的菜品")
             if details:
@@ -1028,7 +1004,7 @@ def smart_recommend():
         else:
             if items:
                 result = random.choice(items)
-                recommendation_text = f"根据你的身体状况，为 {school_name} 的你决定：\n\n✅ {result}\n\n🍽️ 希望你用餐愉快！"
+                recommendation_text = f"为 {school_name} 的你推荐：\n\n✅ {result}\n\n🍽️ 希望你用餐愉快！"
             else:
                 return jsonify({"success": False, "message": "没有可用菜品"}), 400
 
@@ -1037,7 +1013,7 @@ def smart_recommend():
         "result": result,
         "recommendation": recommendation_text,
         "details": details,
-        "bmi": round(bmi_value, 1) if bmi_value else None
+        "goal": goal_name
     })
 
 
@@ -1288,7 +1264,8 @@ def register_meal_user():
     users[username] = {
         "password_hash": pw_hash,
         "salt": salt,
-        "created_at": datetime.datetime.now().isoformat()
+        "created_at": datetime.datetime.now().isoformat(),
+        "goal": ""
     }
 
     if save_meal_users(users):
@@ -1315,7 +1292,12 @@ def login_meal_user():
     if not verify_password(password, user.get('password_hash', ''), user.get('salt', '')):
         return jsonify({"success": False, "message": "密码错误"}), 401
 
-    return jsonify({"success": True, "message": f"欢迎回来，{username}！", "username": username})
+    return jsonify({
+        "success": True, 
+        "message": f"欢迎回来，{username}！", 
+        "username": username,
+        "goal": user.get('goal', '')
+    })
 
 
 @app.route('/api/meal-user/check', methods=['GET'])
@@ -1326,6 +1308,45 @@ def check_meal_user():
         return jsonify({"exists": False})
     users = load_meal_users()
     return jsonify({"exists": username in users})
+
+
+@app.route('/api/meal-user/goal', methods=['GET'])
+def get_user_goal():
+    """获取用户目标"""
+    username = request.args.get('username', '').strip()
+    if not username:
+        return jsonify({"success": False, "message": "请先登录"}), 400
+    users = load_meal_users()
+    if username not in users:
+        return jsonify({"success": False, "message": "用户不存在"}), 404
+    return jsonify({
+        "success": True,
+        "goal": users[username].get('goal', '')
+    })
+
+
+@app.route('/api/meal-user/goal', methods=['PUT'])
+def set_user_goal():
+    """设置用户目标"""
+    data = request.json or {}
+    username = data.get('username', '').strip()
+    goal = data.get('goal', '').strip()
+
+    if not username:
+        return jsonify({"success": False, "message": "请先登录"}), 400
+    if goal not in ('cutting', 'bulking', 'healthy', ''):
+        return jsonify({"success": False, "message": "无效目标"}), 400
+
+    users = load_meal_users()
+    if username not in users:
+        return jsonify({"success": False, "message": "用户不存在"}), 404
+
+    users[username]['goal'] = goal
+    if save_meal_users(users):
+        goal_names = {'cutting': '减脂期', 'bulking': '增肌期', 'healthy': '保持健康', '': '未设置'}
+        return jsonify({"success": True, "message": f"目标已设为: {goal_names.get(goal, goal)}"})
+    else:
+        return jsonify({"success": False, "message": "保存失败"}), 500
 
 
 # ========== 三餐打卡 API ==========
@@ -1385,7 +1406,7 @@ def get_today_meal_log():
 
 @app.route('/api/meal-log/weekly-report', methods=['GET'])
 def get_weekly_report():
-    """生成某用户过去7天的饮食报告"""
+    """生成某用户过去7天的饮食报告（含目标指标和习惯洞察）"""
     username = request.args.get('username', '').strip()
     if not username:
         return jsonify({"success": False, "message": "请先输入昵称"}), 400
@@ -1393,8 +1414,18 @@ def get_weekly_report():
     user_logs = logs.get(username, {})
     today = datetime.date.today()
 
+    # 获取用户目标
+    users = load_meal_users()
+    user_goal = users.get(username, {}).get('goal', '') if username in users else ''
+    goal_names = {'cutting': '减脂期', 'bulking': '增肌期', 'healthy': '保持健康'}
+    goal_name = goal_names.get(user_goal, '')
+
     user_tags = load_user_dish_tags()
     merged_tags = {**user_tags, **FOOD_TAGS}
+
+    protein_tags_set = {"高蛋白", "蛋白质", "鸡蛋", "鸡肉", "牛肉", "鱼", "豆腐", "虾"}
+    unhealthy_tags_set = {"油炸", "油爆", "干煸", "红烧", "糖醋", "高糖"}
+    healthy_tags_set = {"清蒸", "凉拌", "清淡", "蔬菜", "高纤维"}
 
     days_checked_in = 0
     total_meals = 0
@@ -1404,6 +1435,14 @@ def get_weekly_report():
     daily_summary = []
     meal_completion = {"breakfast": 0, "lunch": 0, "dinner": 0}
 
+    # 每日目标指标（用于折线图）
+    daily_goal_metric = []
+    # 用于习惯洞察
+    all_dishes_with_dates = []  # [(date_str, dish_name), ...]
+    # 连续打卡天数（从今天往前数）
+    consecutive_days = 0
+    streak_broken = False
+
     for i in range(6, -1, -1):
         day = today - datetime.timedelta(days=i)
         day_str = day.strftime("%Y-%m-%d")
@@ -1411,6 +1450,10 @@ def get_weekly_report():
 
         day_meals = 0
         day_dish_count = 0
+        day_protein = 0
+        day_unhealthy = 0
+        day_healthy = 0
+
         for meal_type in ("breakfast", "lunch", "dinner"):
             dishes = day_data.get(meal_type, [])
             if dishes:
@@ -1420,13 +1463,35 @@ def get_weekly_report():
                     day_dish_count += 1
                     total_dishes += 1
                     dish_counter[dish] = dish_counter.get(dish, 0) + 1
+                    all_dishes_with_dates.append((day_str, dish))
                     if dish in merged_tags:
-                        for tag in merged_tags[dish]:
+                        tags = merged_tags[dish]
+                        for tag in tags:
                             category_counter[tag] = category_counter.get(tag, 0) + 1
+                        if any(t in tags for t in protein_tags_set):
+                            day_protein += 1
+                        if any(t in tags for t in unhealthy_tags_set):
+                            day_unhealthy += 1
+                        if any(t in tags for t in healthy_tags_set):
+                            day_healthy += 1
+                    # 名称关键词兜底
+                    if any(kw in dish for kw in ["鸡胸", "牛肉", "鱼", "鸡蛋", "豆腐", "虾"]):
+                        day_protein += 1
+                    if any(kw in dish for kw in ["炸鸡", "红烧肉", "蛋糕", "薯条"]):
+                        day_unhealthy += 1
 
         if day_meals > 0:
             days_checked_in += 1
         total_meals += day_meals
+
+        # 计算每日目标指标
+        if user_goal == 'cutting':
+            metric_val = day_unhealthy  # 减脂期：不健康菜品数（越少越好）
+        elif user_goal == 'bulking':
+            metric_val = day_protein  # 增肌期：高蛋白菜品数（越多越好）
+        else:
+            metric_val = day_meals  # 保持健康：打卡餐数
+        daily_goal_metric.append(metric_val)
 
         daily_summary.append({
             "date": day_str,
@@ -1435,22 +1500,207 @@ def get_weekly_report():
             "dish_count": day_dish_count
         })
 
+    # 重新计算连续打卡天数（从今天往前连续）
+    consecutive_days = 0
+    for i in range(0, 7):
+        day = today - datetime.timedelta(days=i)
+        day_str = day.strftime("%Y-%m-%d")
+        day_data = user_logs.get(day_str, {"breakfast": [], "lunch": [], "dinner": []})
+        has_meals = any(len(day_data.get(m, [])) > 0 for m in ("breakfast", "lunch", "dinner"))
+        if has_meals:
+            consecutive_days += 1
+        else:
+            break
+
     sorted_dishes = sorted(dish_counter.items(), key=lambda x: x[1], reverse=True)[:5]
     top_dishes = [{"name": name, "count": count} for name, count in sorted_dishes]
 
     sorted_cats = sorted(category_counter.items(), key=lambda x: x[1], reverse=True)[:8]
     category_distribution = {cat: count for cat, count in sorted_cats}
 
+    # 习惯洞察
+    insights = []
+    if consecutive_days >= 3:
+        insights.append(f"你已经连续打卡 {consecutive_days} 天，继续保持！")
+    if top_dishes and top_dishes[0]["count"] >= 3:
+        insights.append(f"「{top_dishes[0]['name']}」是你本周最爱，吃了 {top_dishes[0]['count']} 次")
+
+    # 检测连续多天同一菜品
+    from collections import defaultdict
+    dish_dates = defaultdict(list)
+    for date_str, dish in all_dishes_with_dates:
+        dish_dates[dish].append(date_str)
+    for dish, dates in dish_dates.items():
+        unique_dates = sorted(set(dates))
+        if len(unique_dates) >= 3:
+            date_objs = [datetime.datetime.strptime(d, "%Y-%m-%d").date() for d in unique_dates]
+            consec = 1
+            max_consec = 1
+            for j in range(1, len(date_objs)):
+                if (date_objs[j] - date_objs[j-1]).days == 1:
+                    consec += 1
+                    max_consec = max(max_consec, consec)
+                else:
+                    consec = 1
+            if max_consec >= 3:
+                insights.append(f"「{dish}」连续 {max_consec} 天都在吃，建议换换口味")
+                break  # 只提示一条
+
+    if not insights:
+        if days_checked_in == 0:
+            insights.append("本周还没有打卡记录，从今天开始记录吧！")
+        elif days_checked_in < 3:
+            insights.append(f"本周打卡 {days_checked_in} 天，坚持每天记录会更有参考价值")
+
     return jsonify({
         "success": True,
         "username": username,
+        "goal": goal_name,
         "days_checked_in": days_checked_in,
         "total_meals": total_meals,
         "total_dishes": total_dishes,
         "top_dishes": top_dishes,
         "category_distribution": category_distribution,
         "daily_summary": daily_summary,
-        "meal_completion": meal_completion
+        "daily_goal_metric": daily_goal_metric,
+        "meal_completion": meal_completion,
+        "consecutive_days": consecutive_days,
+        "insights": insights[:3]  # 最多3条
+    })
+
+
+@app.route('/api/meal-log/daily-briefing', methods=['GET'])
+def daily_briefing():
+    """今日饮食简报"""
+    username = request.args.get('username', '').strip()
+    if not username:
+        return jsonify({"success": False, "message": "请先登录"}), 400
+
+    logs = load_meal_logs()
+    user_logs = logs.get(username, {})
+    today = datetime.date.today()
+    today_str = today.strftime("%Y-%m-%d")
+    today_data = user_logs.get(today_str, {"breakfast": [], "lunch": [], "dinner": []})
+
+    # 获取用户目标
+    users = load_meal_users()
+    user_goal = users.get(username, {}).get('goal', '') if username in users else ''
+    goal_names = {'cutting': '减脂期', 'bulking': '增肌期', 'healthy': '保持健康'}
+    goal_name = goal_names.get(user_goal, '')
+
+    # 统计各餐
+    meal_counts = {}
+    all_dishes = []
+    for meal_type in ("breakfast", "lunch", "dinner"):
+        dishes = today_data.get(meal_type, [])
+        meal_counts[meal_type] = len(dishes)
+        all_dishes.extend(dishes)
+
+    total_dishes = len(all_dishes)
+    meals_logged = sum(1 for v in meal_counts.values() if v > 0)
+
+    if total_dishes == 0:
+        return jsonify({
+            "success": True,
+            "total_dishes": 0,
+            "meals_logged": 0,
+            "message": "今天还没有打卡记录，快去记录今天吃了什么吧！",
+            "goal": goal_name
+        })
+
+    # 用 FOOD_TAGS 分析烹饪方式
+    user_tags = load_user_dish_tags()
+    merged_tags = {**user_tags, **FOOD_TAGS}
+
+    cooking_methods = {}  # 烹饪方式统计
+    protein_count = 0  # 高蛋白菜品数
+    unhealthy_count = 0  # 不健康菜品数（油炸等）
+    vegetable_count = 0  # 蔬菜菜品数
+
+    protein_tags = ["高蛋白", "蛋白质", "鸡蛋", "鸡肉", "牛肉", "鱼", "豆腐", "虾"]
+    unhealthy_tags = ["油炸", "油爆", "干煸", "红烧", "糖醋", "高糖"]
+    vegetable_tags = ["蔬菜", "清淡", "凉拌", "清蒸", "高纤维"]
+
+    for dish in all_dishes:
+        tags = merged_tags.get(dish, [])
+        # 烹饪方式统计
+        for tag in tags:
+            if tag in ["油炸", "清蒸", "红烧", "凉拌", "炒", "烤", "煮", "蒸", "煎", "糖醋", "油爆", "干煸"]:
+                cooking_methods[tag] = cooking_methods.get(tag, 0) + 1
+        # 分类统计
+        if any(t in tags for t in protein_tags) or any(t in dish for t in ["鸡胸", "牛肉", "鱼", "鸡蛋", "豆腐", "虾"]):
+            protein_count += 1
+        if any(t in tags for t in unhealthy_tags) or any(t in dish for t in ["炸鸡", "红烧肉", "蛋糕", "薯条"]):
+            unhealthy_count += 1
+        if any(t in tags for t in vegetable_tags) or any(t in dish for t in ["西兰花", "青菜", "黄瓜", "番茄"]):
+            vegetable_count += 1
+
+    # 根据目标生成评价
+    score = 70  # 默认分数
+    tip = ""
+    details = []
+
+    if user_goal == 'cutting':
+        # 减脂期评价
+        if unhealthy_count > 0:
+            score -= unhealthy_count * 10
+            tip = f"今天有 {unhealthy_count} 道高油菜品，建议明天换成清蒸或凉拌的做法"
+        if vegetable_count > 2:
+            score += 10
+            details.append(f"蔬菜摄入 {vegetable_count} 次，继续保持")
+        if protein_count > 0:
+            score += 5
+            details.append(f"蛋白质摄入 {protein_count} 次")
+        if not tip:
+            if unhealthy_count == 0:
+                tip = "今天饮食很清淡，减脂节奏把握得不错！"
+            else:
+                tip = "注意控制油脂摄入，优先选择清蒸、凉拌类菜品"
+    elif user_goal == 'bulking':
+        # 增肌期评价
+        if protein_count >= 3:
+            score += 15
+            tip = f"蛋白质摄入 {protein_count} 次，增肌营养跟上了！"
+        elif protein_count >= 1:
+            score += 5
+            tip = f"蛋白质摄入 {protein_count} 次，还可以多吃点鸡蛋和鸡胸肉"
+        else:
+            score -= 10
+            tip = "今天蛋白质摄入不足，建议加一份鸡蛋或豆腐"
+        if total_dishes >= 4:
+            score += 5
+            details.append(f"总摄入 {total_dishes} 道菜品，热量充足")
+    else:
+        # 保持健康 / 未设目标
+        if meals_logged >= 3:
+            score += 10
+            details.append("三餐都有记录，饮食规律")
+        elif meals_logged == 0:
+            score -= 10
+        if vegetable_count > 0 and protein_count > 0:
+            score += 10
+            tip = "荤素搭配不错，继续保持！"
+        elif total_dishes > 0:
+            tip = "记得荤素搭配，每餐都有蔬菜和蛋白质最理想"
+        if unhealthy_count > 2:
+            score -= unhealthy_count * 5
+            details.append(f"高油菜品 {unhealthy_count} 次，稍微多了点")
+
+    score = max(0, min(100, score))
+
+    return jsonify({
+        "success": True,
+        "total_dishes": total_dishes,
+        "meals_logged": meals_logged,
+        "meal_counts": meal_counts,
+        "protein_count": protein_count,
+        "unhealthy_count": unhealthy_count,
+        "vegetable_count": vegetable_count,
+        "cooking_methods": cooking_methods,
+        "score": score,
+        "tip": tip,
+        "details": details,
+        "goal": goal_name
     })
 
 

@@ -1,4 +1,4 @@
-# v14 - 排行榜功能 + 90所福建高校菜品数据库
+# v15 - 修复排行榜404：添加诊断端点
 services:
   - type: web
     name: cafeteria-recommender

@@ -507,12 +507,17 @@ async function confirmAddDish() {
         return;
     }
     if (editorDishes.includes(name)) {
-        showNotification('该菜品已存在', 'warning');
+        showNotification('该菜品已存在', 'info');
         return;
     }
+    // 先立即加入列表并刷新显示
+    editorDishes.push(name);
+    renderDishList();
+    showNotification(`已添加「${name}」`, 'success');
+    input.value = '';
     pendingAddDish = name;
     pendingAddTags = [];
-    // 显示标注区域
+    // 再显示标注区域（可选）
     await showAddDishTagUI(name);
 }
 
@@ -569,22 +574,17 @@ function toggleAddDishTag(tag) {
 
 function finishAddDishWithTags() {
     if (!pendingAddDish) return;
-    editorDishes.push(pendingAddDish);
-    // 保存标签
+    // 菜品已在列表中，只需保存标签
     if (pendingAddTags.length > 0) {
         saveDishTags(pendingAddDish, pendingAddTags);
+        showNotification(`已为「${pendingAddDish}」标注 ${pendingAddTags.length} 个标签`, 'success');
     }
-    showNotification(`已添加「${pendingAddDish}」并标注 ${pendingAddTags.length} 个标签`, 'success');
     resetAddDishArea();
-    renderDishList();
 }
 
 function finishAddDishSkipTags() {
-    if (!pendingAddDish) return;
-    editorDishes.push(pendingAddDish);
-    showNotification(`已添加「${pendingAddDish}」`, 'success');
+    // 菜品已在列表中，只需关闭标注区域
     resetAddDishArea();
-    renderDishList();
 }
 
 async function saveDishTags(dishName, tags) {
@@ -2232,55 +2232,122 @@ async function updateDailyScore() {
     const tagsEl = document.getElementById('heroTags');
     if (!ring || !scoreEl) return;
 
-    try {
-        const resp = await fetch(`/api/daily-score?username=${encodeURIComponent(user)}`);
-        const data = await resp.json();
-        if (!data.success) return;
+    // 从本地存储读取今日数据
+    const today = new Date().toISOString().split('T')[0];
+    const todayData = localGetMealLog(user, today);
+    const breakfast = todayData.breakfast || [];
+    const lunch = todayData.lunch || [];
+    const dinner = todayData.dinner || [];
+    const allDishes = [...breakfast, ...lunch, ...dinner];
+    const totalDishes = allDishes.length;
 
-        const score = data.score || 0;
-        const angle = (score / 100) * 360;
+    const checkin = {
+        breakfast: breakfast.length > 0,
+        lunch: lunch.length > 0,
+        dinner: dinner.length > 0
+    };
+    const mealsLogged = [checkin.breakfast, checkin.lunch, checkin.dinner].filter(Boolean).length;
 
-        // 颜色
-        let color, colorClass;
-        if (score >= 90) { color = '#27ae60'; colorClass = 'hero-score-green'; }
-        else if (score >= 70) { color = '#2980b9'; colorClass = 'hero-score-blue'; }
-        else if (score >= 50) { color = '#e67e22'; colorClass = 'hero-score-orange'; }
-        else if (score > 0) { color = '#e74c3c'; colorClass = 'hero-score-red'; }
-        else { color = '#bdc3c7'; colorClass = 'hero-score-gray'; }
+    // 无数据
+    if (totalDishes === 0) {
+        setGaugeDisplay(0, '#bdc3c7', 'hero-score-gray', checkin, '今天还没有打卡哦，快去记录第一餐吧！', []);
+        return;
+    }
 
-        // 更新环形仪表
-        ring.style.setProperty('--gauge-angle', angle);
-        ring.style.setProperty('--gauge-color', color);
-        // Fallback: 直接设置 background (某些浏览器不支持 CSS变量在 conic-gradient 中)
-        ring.style.background = `conic-gradient(${color} ${angle}deg, #e8ecf1 ${angle}deg)`;
+    // 获取目标
+    const goal = localGetGoal(user) || localStorage.getItem('user_goal') || '';
 
-        // 分数数字
-        scoreEl.textContent = score;
-        scoreEl.className = 'hero-score-number ' + colorClass;
+    // 分析菜品
+    let proteinCount = 0, vegetableCount = 0, unhealthyCount = 0, friedCount = 0;
+    for (const dish of allDishes) {
+        if (["鸡胸","牛肉","鱼","鸡蛋","豆腐","虾","排骨","瘦肉"].some(kw => dish.includes(kw))) proteinCount++;
+        if (["西兰花","青菜","黄瓜","番茄","蔬菜","沙拉","白菜","菠菜","芹菜","萝卜"].some(kw => dish.includes(kw))) vegetableCount++;
+        if (["炸鸡","红烧肉","蛋糕","薯条"].some(kw => dish.includes(kw))) { unhealthyCount++; friedCount++; }
+        if (["炸","煎"].some(kw => dish.includes(kw)) && !["清炸"].some(kw => dish.includes(kw))) friedCount++;
+    }
 
-        // 打卡状态
-        const checkin = data.checkin || {};
-        updateHeroCheckin('heroBreakfast', '早餐', checkin.breakfast);
-        updateHeroCheckin('heroLunch', '午餐', checkin.lunch);
-        updateHeroCheckin('heroDinner', '晚餐', checkin.dinner);
+    // 评分计算
+    let score = 70;
+    if (goal === 'cutting') {
+        if (unhealthyCount > 0) score -= unhealthyCount * 10;
+        if (vegetableCount > 2) score += 10;
+        if (proteinCount > 0) score += 5;
+        if (mealsLogged >= 3) score += 5;
+    } else if (goal === 'bulking') {
+        if (proteinCount >= 3) score += 15;
+        else if (proteinCount >= 1) score += 5;
+        else score -= 10;
+        if (totalDishes >= 4) score += 5;
+    } else {
+        if (mealsLogged >= 3) score += 10;
+        if (vegetableCount > 0 && proteinCount > 0) score += 10;
+        else if (totalDishes > 0 && vegetableCount === 0) score -= 5;
+        if (friedCount > 2) score -= 5;
+    }
 
-        // 动态评语
-        if (commentEl) {
-            commentEl.textContent = data.comment || '';
-        }
+    // 动态评语
+    let comment = '';
+    if (score >= 90) comment = '今天饮食非常均衡，继续保持！';
+    else if (score >= 70) comment = '今天吃得不错，还可以更好哦';
+    else if (score >= 50) comment = '饮食还有改善空间，注意荤素搭配';
+    else comment = '今天饮食需要注意调整哦';
 
-        // 统计标签
-        if (tagsEl) {
-            tagsEl.innerHTML = '';
-            (data.tags || []).forEach(tag => {
-                const span = document.createElement('span');
-                span.className = 'hero-tag hero-tag-' + (tag.type || 'info');
-                span.textContent = tag.text;
-                tagsEl.appendChild(span);
-            });
-        }
-    } catch (e) {
-        console.error('获取每日评分失败:', e);
+    if (goal === 'bulking') {
+        if (proteinCount >= 3) comment = `蛋白质摄入${proteinCount}次，增肌营养跟上了！`;
+        else if (proteinCount === 0) comment = '今天蛋白质摄入不足，建议加份鸡蛋或豆腐';
+    } else if (goal === 'cutting') {
+        if (unhealthyCount === 0 && vegetableCount > 0) comment = '清淡饮食+蔬菜，减脂节奏把握得很好！';
+        else if (unhealthyCount > 0) comment = `今天有${unhealthyCount}道高油菜品，建议换成清蒸或凉拌`;
+    }
+
+    // 统计标签
+    const tags = [];
+    if (proteinCount > 0) tags.push({ text: `蛋白质 ${proteinCount}次`, type: 'good' });
+    if (vegetableCount > 0) tags.push({ text: `蔬菜 ${vegetableCount}次`, type: 'good' });
+    if (vegetableCount === 0 && totalDishes > 0) tags.push({ text: '蔬菜摄入偏少', type: 'warn' });
+    if (friedCount > 0) tags.push({ text: `油炸 ${friedCount}次`, type: friedCount > 1 ? 'warn' : 'info' });
+    if (mealsLogged < 3) tags.push({ text: `已打卡${mealsLogged}餐`, type: 'info' });
+
+    score = Math.max(0, Math.min(100, score));
+
+    // 颜色
+    let color, colorClass;
+    if (score >= 90) { color = '#27ae60'; colorClass = 'hero-score-green'; }
+    else if (score >= 70) { color = '#2980b9'; colorClass = 'hero-score-blue'; }
+    else if (score >= 50) { color = '#e67e22'; colorClass = 'hero-score-orange'; }
+    else { color = '#e74c3c'; colorClass = 'hero-score-red'; }
+
+    setGaugeDisplay(score, color, colorClass, checkin, comment, tags);
+}
+
+function setGaugeDisplay(score, color, colorClass, checkin, comment, tags) {
+    const ring = document.getElementById('heroGaugeRing');
+    const scoreEl = document.getElementById('heroScoreNumber');
+    const commentEl = document.getElementById('heroComment');
+    const tagsEl = document.getElementById('heroTags');
+
+    if (!ring || !scoreEl) return;
+
+    const angle = (score / 100) * 360;
+    ring.style.background = `conic-gradient(${color} ${angle}deg, #e8ecf1 ${angle}deg)`;
+
+    scoreEl.textContent = score;
+    scoreEl.className = 'hero-score-number ' + colorClass;
+
+    updateHeroCheckin('heroBreakfast', '早餐', checkin.breakfast);
+    updateHeroCheckin('heroLunch', '午餐', checkin.lunch);
+    updateHeroCheckin('heroDinner', '晚餐', checkin.dinner);
+
+    if (commentEl) commentEl.textContent = comment || '';
+
+    if (tagsEl) {
+        tagsEl.innerHTML = '';
+        (tags || []).forEach(tag => {
+            const span = document.createElement('span');
+            span.className = 'hero-tag hero-tag-' + (tag.type || 'info');
+            span.textContent = tag.text;
+            tagsEl.appendChild(span);
+        });
     }
 }
 
@@ -2292,8 +2359,6 @@ function updateHeroCheckin(elementId, mealName, isChecked) {
 }
 
 async function saveCurrentMeal() {
-    const meal = currentMealTab;
-    const dishes = todayMeals[meal] || [];
     const today = new Date().toISOString().split('T')[0];
     const mealNames = { breakfast: '早餐', lunch: '午餐', dinner: '晚餐' };
     const user = getMealUser();
@@ -2303,8 +2368,23 @@ async function saveCurrentMeal() {
         return;
     }
 
-    localSaveMealLog(user, today, meal, dishes);
-    showNotification(`${mealNames[meal]}已保存 ${dishes.length} 道菜品`, 'success');
+    // 保存所有三餐记录
+    let totalCount = 0;
+    let savedMeals = [];
+    for (const meal of ['breakfast', 'lunch', 'dinner']) {
+        const dishes = todayMeals[meal] || [];
+        localSaveMealLog(user, today, meal, dishes);
+        if (dishes.length > 0) {
+            totalCount += dishes.length;
+            savedMeals.push(mealNames[meal]);
+        }
+    }
+
+    if (savedMeals.length > 0) {
+        showNotification(`已保存：${savedMeals.join('、')}（共 ${totalCount} 道菜品）`, 'success');
+    } else {
+        showNotification('没有需要保存的菜品', 'info');
+    }
     updateTodayCheckinBar();
     updateDailyScore();
 }

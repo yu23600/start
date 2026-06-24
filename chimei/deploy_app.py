@@ -1295,6 +1295,21 @@ def get_tag_taxonomy():
     })
 
 
+@app.route('/api/dish-tags/<dish_name>', methods=['GET'])
+def get_dish_tags(dish_name):
+    """获取指定菜品的已有标签"""
+    user_tags = load_user_dish_tags()
+    tags = user_tags.get(dish_name, [])
+    # 也检查内置 FOOD_TAGS
+    if not tags and dish_name in FOOD_TAGS:
+        tags = FOOD_TAGS[dish_name]
+    return jsonify({
+        "success": True,
+        "dish_name": dish_name,
+        "tags": tags
+    })
+
+
 @app.route('/api/dish-tags/save', methods=['POST'])
 def save_dish_tags():
     """保存用户提交的菜品标签（合并模式）"""

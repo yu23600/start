@@ -352,18 +352,179 @@ function calculateBMI() {
 }
 
 // ========== 菜单编辑器 ==========
+// ========== 菜单编辑器（列表式） ==========
+let editorDishes = []; // 编辑器中的菜品列表
+let pendingAddDish = ''; // 待添加的菜品名
+let pendingAddTags = []; // 待添加菜品的标签
+
 function showMenuEditor() {
     if (!currentSchool) {
         showNotification('请先选择一个学校！', 'warning');
         return;
     }
-    const menuText = document.getElementById('menuText');
-    document.getElementById('menuEditText').value = menuText ? menuText.value : '';
+    // 从 schoolMenuItems 或隐藏 textarea 加载
+    if (schoolMenuItems.length > 0) {
+        editorDishes = [...schoolMenuItems];
+    } else {
+        const menuText = document.getElementById('menuText');
+        const text = menuText ? menuText.value.trim() : '';
+        editorDishes = text ? text.split('\n').map(s => s.trim()).filter(s => s) : [];
+    }
+    document.getElementById('editorSchoolHint').textContent = `「${currentSchool}」共 ${editorDishes.length} 道菜品`;
+    document.getElementById('addDishArea').style.display = 'none';
     document.getElementById('menuEditorModal').classList.add('show');
+    renderDishList();
 }
 
 function closeMenuEditor() {
     document.getElementById('menuEditorModal').classList.remove('show');
+    editorDishes = [];
+}
+
+function renderDishList() {
+    const container = document.getElementById('dishListContainer');
+    if (editorDishes.length === 0) {
+        container.innerHTML = '<p style="text-align:center;color:#999;padding:30px;">暂无菜品，点击下方"添加菜品"按钮</p>';
+    } else {
+        let html = '';
+        editorDishes.forEach((dish, i) => {
+            html += `<div class="editor-dish-item" style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border-bottom:1px solid #f0f0f0;">
+                <span style="flex:1;font-size:0.95em;color:#333;">${dish}</span>
+                <button onclick="deleteDishFromEditor(${i})" style="background:none;border:none;color:#ff6b6b;cursor:pointer;font-size:1.1em;padding:4px 8px;border-radius:6px;" title="删除" onmouseover="this.style.background='#fff0f0'" onmouseout="this.style.background='none'">✕</button>
+            </div>`;
+        });
+        container.innerHTML = html;
+    }
+    document.getElementById('editorItemCount').textContent = `共 ${editorDishes.length} 道菜品`;
+}
+
+function deleteDishFromEditor(index) {
+    const dish = editorDishes[index];
+    editorDishes.splice(index, 1);
+    renderDishList();
+    showNotification(`已移除「${dish}」`, 'info');
+}
+
+function showAddDishArea() {
+    document.getElementById('addDishArea').style.display = 'block';
+    document.getElementById('addDishTagArea').style.display = 'none';
+    const input = document.getElementById('addDishInput');
+    input.value = '';
+    input.focus();
+    pendingAddDish = '';
+    pendingAddTags = [];
+}
+
+function cancelAddDish() {
+    document.getElementById('addDishArea').style.display = 'none';
+    pendingAddDish = '';
+    pendingAddTags = [];
+}
+
+async function confirmAddDish() {
+    const input = document.getElementById('addDishInput');
+    const name = input.value.trim();
+    if (!name) {
+        showNotification('请输入菜品名称', 'warning');
+        return;
+    }
+    if (editorDishes.includes(name)) {
+        showNotification('该菜品已存在', 'warning');
+        return;
+    }
+    pendingAddDish = name;
+    pendingAddTags = [];
+    // 显示标注区域
+    await showAddDishTagUI(name);
+}
+
+async function showAddDishTagUI(dishName) {
+    const tagArea = document.getElementById('addDishTagArea');
+    tagArea.style.display = 'block';
+    // 加载标签分类
+    let taxonomy = {};
+    try {
+        const resp = await fetch('/api/dish-tags/taxonomy');
+        const data = await resp.json();
+        if (data.success) taxonomy = data.taxonomy;
+    } catch(e) {}
+    // 尝试加载已有标签
+    try {
+        const resp = await fetch(`/api/dish-tags/${encodeURIComponent(dishName)}`);
+        const data = await resp.json();
+        if (data.success && data.tags) pendingAddTags = [...data.tags];
+    } catch(e) {}
+    // 渲染标签 chips
+    const container = document.getElementById('addDishTagChips');
+    let html = '';
+    for (const [cat, tags] of Object.entries(taxonomy)) {
+        html += `<div style="width:100%;font-size:0.8em;color:#888;margin-top:4px;">${cat}</div>`;
+        for (const tag of tags) {
+            const sel = pendingAddTags.includes(tag) ? 'border-color:#667eea;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);color:white;' : '';
+            html += `<div class="add-tag-chip" data-tag="${tag}" onclick="toggleAddDishTag('${tag}')" style="padding:5px 12px;border:2px solid #ddd;border-radius:16px;cursor:pointer;font-size:0.85em;transition:all 0.2s;${sel}">${tag}</div>`;
+        }
+    }
+    container.innerHTML = html;
+}
+
+function toggleAddDishTag(tag) {
+    const idx = pendingAddTags.indexOf(tag);
+    if (idx >= 0) {
+        pendingAddTags.splice(idx, 1);
+    } else {
+        pendingAddTags.push(tag);
+    }
+    // 更新 UI
+    document.querySelectorAll('.add-tag-chip').forEach(chip => {
+        const t = chip.dataset.tag;
+        if (pendingAddTags.includes(t)) {
+            chip.style.borderColor = '#667eea';
+            chip.style.background = 'linear-gradient(135deg,#667eea 0%,#764ba2 100%)';
+            chip.style.color = 'white';
+        } else {
+            chip.style.borderColor = '#ddd';
+            chip.style.background = '#fff';
+            chip.style.color = '#333';
+        }
+    });
+}
+
+function finishAddDishWithTags() {
+    if (!pendingAddDish) return;
+    editorDishes.push(pendingAddDish);
+    // 保存标签
+    if (pendingAddTags.length > 0) {
+        saveDishTags(pendingAddDish, pendingAddTags);
+    }
+    showNotification(`已添加「${pendingAddDish}」并标注 ${pendingAddTags.length} 个标签`, 'success');
+    resetAddDishArea();
+    renderDishList();
+}
+
+function finishAddDishSkipTags() {
+    if (!pendingAddDish) return;
+    editorDishes.push(pendingAddDish);
+    showNotification(`已添加「${pendingAddDish}」`, 'success');
+    resetAddDishArea();
+    renderDishList();
+}
+
+async function saveDishTags(dishName, tags) {
+    try {
+        await fetch('/api/dish-tags/save', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ tags: { [dishName]: tags } })
+        });
+    } catch(e) { console.error('保存标签失败:', e); }
+}
+
+function resetAddDishArea() {
+    document.getElementById('addDishArea').style.display = 'none';
+    document.getElementById('addDishTagArea').style.display = 'none';
+    document.getElementById('addDishInput').value = '';
+    pendingAddDish = '';
+    pendingAddTags = [];
 }
 
 async function saveMenuFromEditor() {
@@ -371,28 +532,21 @@ async function saveMenuFromEditor() {
         showNotification('请先选择一个学校！', 'warning');
         return;
     }
-    
-    const menu = document.getElementById('menuEditText').value.trim();
-    
-    if (!menu) {
+    const menu = editorDishes.join('\n');
+    if (editorDishes.length === 0) {
         if (!confirm('菜单内容为空，确定要保存吗？')) return;
     }
-    
     try {
         const response = await fetch(`/api/menu/${encodeURIComponent(currentSchool)}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ menu: menu })
         });
-        
         const data = await response.json();
-        
         if (data.success) {
-            // 同步到隐藏的 textarea
             const menuText = document.getElementById('menuText');
             if (menuText) menuText.value = data.menu;
             document.getElementById('itemCount').textContent = `(${data.count} 项)`;
-            // 更新 schoolMenuItems
             schoolMenuItems = data.menu.split('\n').map(s => s.trim()).filter(s => s);
             const syncMsg = data.cloud_synced ? '菜单已保存到云端！' : '菜单已保存（云端同步失败，仅本地保存）';
             showNotification(syncMsg, data.cloud_synced ? 'success' : 'warning');

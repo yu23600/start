@@ -384,12 +384,34 @@
             <div class="modal-content" style="max-width: 600px; max-height: 85vh; overflow-y: auto;">
                 <span class="close-btn" onclick="closeMenuEditor()">&times;</span>
                 <h2 style="color: #667eea; margin-bottom: 15px; text-align: center;">📋 编辑菜单</h2>
-                <p class="hint" style="text-align:center;">每行一个菜品，或用逗号/空格分隔</p>
-                <textarea id="menuEditText" class="menu-textarea" style="min-height:300px;" placeholder="请输入菜品列表..."></textarea>
-                <div style="display:flex;gap:10px;justify-content:center;margin-top:15px;">
-                    <button onclick="saveMenuFromEditor()" class="btn btn-primary btn-large">💾 保存</button>
-                    <button onclick="closeMenuEditor()" class="btn btn-secondary btn-large">取消</button>
+                <p class="hint" style="text-align:center;" id="editorSchoolHint">当前学校菜品列表</p>
+                <!-- 添加菜品区域 -->
+                <div id="addDishArea" style="display:none;margin-bottom:15px;padding:15px;background:#f8f9fa;border-radius:12px;">
+                    <p style="font-weight:600;color:#495057;margin-bottom:8px;">添加新菜品</p>
+                    <div style="display:flex;gap:8px;margin-bottom:10px;">
+                        <input type="text" id="addDishInput" placeholder="输入菜品名称" style="flex:1;padding:10px 14px;border:2px solid #e0e0e0;border-radius:10px;font-size:0.95em;outline:none;" onkeypress="if(event.key==='Enter')confirmAddDish()">
+                        <button onclick="confirmAddDish()" class="btn btn-primary btn-small">添加</button>
+                        <button onclick="cancelAddDish()" class="btn btn-secondary btn-small">取消</button>
+                    </div>
+                    <!-- 标注区域 -->
+                    <div id="addDishTagArea" style="display:none;">
+                        <p style="font-size:0.85em;color:#666;margin-bottom:6px;">为这道菜标注分类（可跳过）：</p>
+                        <div id="addDishTagChips" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;"></div>
+                        <div style="display:flex;gap:8px;">
+                            <button onclick="finishAddDishWithTags()" class="btn btn-primary btn-small">确认添加</button>
+                            <button onclick="finishAddDishSkipTags()" class="btn btn-secondary btn-small">跳过标注</button>
+                        </div>
+                    </div>
                 </div>
+                <!-- 菜品列表 -->
+                <div id="dishListContainer" style="max-height:400px;overflow-y:auto;margin-bottom:15px;"></div>
+                <!-- 底部按钮 -->
+                <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
+                    <button onclick="showAddDishArea()" class="btn btn-success btn-small">+ 添加菜品</button>
+                    <button onclick="saveMenuFromEditor()" class="btn btn-primary btn-small">💾 保存菜单</button>
+                    <button onclick="closeMenuEditor()" class="btn btn-secondary btn-small">关闭</button>
+                </div>
+                <p id="editorItemCount" style="text-align:center;color:#999;font-size:0.85em;margin-top:10px;"></p>
             </div>
         </div>
 

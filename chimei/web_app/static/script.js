@@ -292,7 +292,8 @@ async function saveMenuFromEditor() {
             document.getElementById('itemCount').textContent = `(${data.count} 项)`;
             // 更新 schoolMenuItems
             schoolMenuItems = data.menu.split('\n').map(s => s.trim()).filter(s => s);
-            showNotification(`菜单已保存！`, 'success');
+            const syncMsg = data.cloud_synced ? '菜单已保存到云端！' : '菜单已保存（云端同步失败，仅本地保存）';
+            showNotification(syncMsg, data.cloud_synced ? 'success' : 'warning');
             closeMenuEditor();
         } else {
             showNotification(data.message, 'error');

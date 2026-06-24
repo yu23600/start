@@ -680,7 +680,19 @@ def load_all_data():
 
 
 def save_all_data(data):
-    """保存所有学校数据（Supabase 优先，降级到 JSON）"""
+    """保存所有学校数据（JSON 保底 + Supabase 同步）"""
+    json_ok = False
+    supabase_ok = False
+
+    # 1. 始终写入 JSON 文件作为保底（防止 Supabase 写入失败丢数据）
+    try:
+        with open(DATA_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        json_ok = True
+    except Exception as e:
+        print(f"[save_all_data] JSON 保存失败: {e}")
+
+    # 2. 尝试同步到 Supabase
     if supabase_client:
         try:
             rows = []
@@ -693,18 +705,15 @@ def save_all_data(data):
                     "last_modified": last_modified
                 })
             if rows:
-                supabase_client.table('school_menus').upsert(rows, on_conflict='school_name').execute()
-            return True
+                resp = supabase_client.table('school_menus').upsert(rows, on_conflict='school_name').execute()
+                supabase_ok = True
+                print(f"[save_all_data] Supabase 同步成功，{len(rows)} 所学校")
         except Exception as e:
-            print(f"Supabase 保存数据出错: {e}")
-    # 降级：JSON 文件
-    try:
-        with open(DATA_FILE, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
+            print(f"[save_all_data] Supabase 同步失败: {e}")
+
+    if json_ok:
         return True
-    except Exception as e:
-        print(f"保存数据出错: {e}")
-        return False
+    return supabase_ok
 
 
 def add_default_school(data):
@@ -777,26 +786,48 @@ def get_menu(school_name):
 
 @app.route('/api/menu/<school_name>', methods=['POST'])
 def save_menu(school_name):
-    """保存指定学校的菜单"""
-    data = load_all_data()
+    """保存指定学校的菜单（优先直接更新 Supabase 单行，失败则全量保存）"""
     if not school_name:
         return jsonify({"success": False, "message": "学校名称不能为空"}), 400
     menu = request.json.get('menu', '')
     items = [item.strip() for item in menu.replace(",", "\n").split("\n") if item.strip()]
     formatted_menu = "\n".join(items)
+    now = time.strftime("%Y-%m-%d %H:%M")
+
+    # 优先尝试直接更新 Supabase 单行（高效且可靠）
+    supabase_ok = False
+    if supabase_client:
+        try:
+            supabase_client.table('school_menus').upsert({
+                "school_name": school_name,
+                "menu": formatted_menu,
+                "last_modified": now
+            }, on_conflict='school_name').execute()
+            supabase_ok = True
+            print(f"[save_menu] {school_name} 菜单已同步到 Supabase ({len(items)} 项)")
+        except Exception as e:
+            print(f"[save_menu] Supabase 单行更新失败: {e}")
+
+    # 同时写入 JSON 保底 + 更新内存数据
+    data = load_all_data()
     data[school_name] = {
         "menu": formatted_menu,
-        "last_modified": time.strftime("%Y-%m-%d %H:%M")
+        "last_modified": now
     }
-    if save_all_data(data):
-        return jsonify({
-            "success": True,
-            "message": "保存成功",
-            "menu": formatted_menu,
-            "count": len(items)
-        })
-    else:
-        return jsonify({"success": False, "message": "保存失败"}), 500
+    try:
+        with open(DATA_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        print(f"[save_menu] JSON 保存失败: {e}")
+
+    storage_info = "云端+本地" if supabase_ok else "仅本地（云端同步失败）"
+    return jsonify({
+        "success": True,
+        "message": f"保存成功（{storage_info}）",
+        "menu": formatted_menu,
+        "count": len(items),
+        "cloud_synced": supabase_ok
+    })
 
 
 @app.route('/api/school/add', methods=['POST'])

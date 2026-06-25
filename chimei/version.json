@@ -1,5 +1,5 @@
 {
     "version": "1.4.0",
     "build_time": "2026-06-25",
-    "changelog": "排行榜简化为全局排行，移除学校筛选"
+    "changelog": "排行榜数据迁移到Supabase云数据库(持久化) + 移除学校筛选"
 }

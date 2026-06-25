@@ -27,7 +27,7 @@ import secrets
 import inspect as _inspect
 _deploy_file = _inspect.getfile(_inspect.currentframe())
 _deploy_lines = len(open(_deploy_file, 'r', encoding='utf-8').readlines())
-print("[DEPLOY DIAG] file=" + _deploy_file + " lines=" + str(_deploy_lines) + " deploy_id=v16-lb-fix")
+print("[DEPLOY DIAG] file=" + _deploy_file + " lines=" + str(_deploy_lines) + " deploy_id=v17-lb-supabase")
 
 # ========== Supabase 云数据库 ==========
 SUPABASE_URL = os.environ.get('SUPABASE_URL', '')
@@ -63,6 +63,64 @@ def migrate_supabase():
         print("OK: Supabase migration (role column)")
     except Exception as e:
         print(f"WARN: Supabase migration skipped (role): {e}")
+
+    # 创建排行榜分数表
+    try:
+        supabase_client.rpc('exec_sql', {
+            'sql': """CREATE TABLE IF NOT EXISTS leaderboard_scores (
+                username TEXT NOT NULL,
+                date TEXT NOT NULL,
+                score INTEGER DEFAULT 0,
+                school TEXT DEFAULT '',
+                meals_count INTEGER DEFAULT 0,
+                submitted_at TEXT DEFAULT '',
+                PRIMARY KEY (username, date)
+            );"""
+        }).execute()
+        print("OK: leaderboard_scores table")
+    except Exception as e:
+        print(f"WARN: leaderboard_scores table creation: {e}")
+
+    # 创建排行榜隐私表
+    try:
+        supabase_client.rpc('exec_sql', {
+            'sql': """CREATE TABLE IF NOT EXISTS leaderboard_privacy (
+                username TEXT PRIMARY KEY,
+                opted_in BOOLEAN DEFAULT true
+            );"""
+        }).execute()
+        print("OK: leaderboard_privacy table")
+    except Exception as e:
+        print(f"WARN: leaderboard_privacy table creation: {e}")
+
+    # 设置 RLS 策略
+    for tbl in ['leaderboard_scores', 'leaderboard_privacy']:
+        try:
+            supabase_client.rpc('exec_sql', {
+                'sql': f"ALTER TABLE {tbl} ENABLE ROW LEVEL SECURITY;"
+            }).execute()
+        except:
+            pass
+        try:
+            supabase_client.rpc('exec_sql', {
+                'sql': f"""DO $$ BEGIN
+                    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'anon_select_{tbl}' AND tablename = '{tbl}') THEN
+                        CREATE POLICY "anon_select_{tbl}" ON {tbl} FOR SELECT TO anon USING (true);
+                    END IF;
+                END $$;"""
+            }).execute()
+        except:
+            pass
+        try:
+            supabase_client.rpc('exec_sql', {
+                'sql': f"""DO $$ BEGIN
+                    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'anon_insert_{tbl}' AND tablename = '{tbl}') THEN
+                        CREATE POLICY "anon_insert_{tbl}" ON {tbl} FOR INSERT TO anon WITH CHECK (true);
+                    END IF;
+                END $$;"""
+            }).execute()
+        except:
+            pass
 
 if SUPABASE_URL and SUPABASE_ANON_KEY:
     migrate_supabase()
@@ -3292,7 +3350,24 @@ def leaderboard_check():
 
 # ========== 排行榜 API ==========
 def load_leaderboard_scores():
-    """加载排行榜分数数据"""
+    """加载排行榜分数数据 - 优先Supabase"""
+    if supabase_client:
+        try:
+            resp = supabase_client.table('leaderboard_scores').select('*').execute()
+            result = {}
+            for row in (resp.data or []):
+                u = row['username']
+                if u not in result:
+                    result[u] = {}
+                result[u][row['date']] = {
+                    'score': row.get('score', 0),
+                    'school': row.get('school', ''),
+                    'meals_count': row.get('meals_count', 0),
+                    'submitted_at': row.get('submitted_at', '')
+                }
+            return result
+        except Exception as e:
+            print(f"Supabase加载排行榜失败: {e}")
     if os.path.exists(LEADERBOARD_FILE):
         try:
             with open(LEADERBOARD_FILE, 'r', encoding='utf-8') as f:
@@ -3302,7 +3377,7 @@ def load_leaderboard_scores():
     return {}
 
 def save_leaderboard_scores(data):
-    """保存排行榜分数数据"""
+    """保存排行榜分数数据 - 仅JSON fallback"""
     try:
         with open(LEADERBOARD_FILE, 'w', encoding='utf-8') as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
@@ -3312,7 +3387,13 @@ def save_leaderboard_scores(data):
         return False
 
 def load_leaderboard_privacy():
-    """加载排行榜隐私设置 {username: opted_in}"""
+    """加载排行榜隐私设置 - 优先Supabase"""
+    if supabase_client:
+        try:
+            resp = supabase_client.table('leaderboard_privacy').select('*').execute()
+            return {row['username']: row.get('opted_in', True) for row in (resp.data or [])}
+        except Exception as e:
+            print(f"Supabase加载隐私设置失败: {e}")
     if os.path.exists(LEADERBOARD_PRIVACY_FILE):
         try:
             with open(LEADERBOARD_PRIVACY_FILE, 'r', encoding='utf-8') as f:
@@ -3322,7 +3403,7 @@ def load_leaderboard_privacy():
     return {}
 
 def save_leaderboard_privacy(data):
-    """保存排行榜隐私设置"""
+    """保存排行榜隐私设置 - 仅JSON fallback"""
     try:
         with open(LEADERBOARD_PRIVACY_FILE, 'w', encoding='utf-8') as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
@@ -3332,7 +3413,15 @@ def save_leaderboard_privacy(data):
         return False
 
 def is_opted_in(username):
-    """检查用户是否参与排行榜（默认参与）"""
+    """检查用户是否参与排行榜（默认参与）- 优先Supabase"""
+    if supabase_client:
+        try:
+            resp = supabase_client.table('leaderboard_privacy').select('opted_in').eq('username', username).execute()
+            if resp.data and len(resp.data) > 0:
+                return resp.data[0].get('opted_in', True)
+            return True
+        except:
+            pass
     privacy = load_leaderboard_privacy()
     return privacy.get(username, True)
 
@@ -3349,6 +3438,23 @@ def submit_leaderboard_score():
     if not username or not date:
         return jsonify({"success": False, "message": "参数不完整"}), 400
 
+    # 优先写入Supabase
+    if supabase_client:
+        try:
+            supabase_client.table('leaderboard_scores').upsert({
+                'username': username,
+                'date': date,
+                'score': score,
+                'school': school,
+                'meals_count': meals_count,
+                'submitted_at': datetime.datetime.now().isoformat()
+            }, on_conflict='username,date').execute()
+            print(f"排行榜分数已保存到Supabase: {username} {date} {score}")
+            return jsonify({"success": True})
+        except Exception as e:
+            print(f"Supabase保存排行榜失败: {e}")
+
+    # Fallback: JSON文件
     scores = load_leaderboard_scores()
     if username not in scores:
         scores[username] = {}
@@ -3364,27 +3470,66 @@ def submit_leaderboard_score():
 @app.route('/api/leaderboard', methods=['GET'])
 def get_leaderboard():
     """获取排行榜（日/周/月，全局排行）"""
-    period = request.args.get('period', 'daily')  # daily, weekly, monthly
+    period = request.args.get('period', 'daily')
     target_date = request.args.get('date', datetime.date.today().isoformat())
-
-    scores = load_leaderboard_scores()
-    privacy = load_leaderboard_privacy()
     rankings = []
 
+    if supabase_client:
+        try:
+            from datetime import timedelta
+            target = datetime.date.fromisoformat(target_date)
+            if period == 'daily':
+                date_list = [target_date]
+            elif period == 'weekly':
+                date_list = [(target - timedelta(days=i)).isoformat() for i in range(7)]
+            else:
+                date_list = [(target - timedelta(days=i)).isoformat() for i in range(30)]
+
+            # 获取opted-in用户
+            priv_resp = supabase_client.table('leaderboard_privacy').select('username,opted_in').execute()
+            opted_out = {r['username'] for r in (priv_resp.data or []) if not r.get('opted_in', True)}
+
+            # 查询日期范围内的分数
+            start_date = date_list[-1]
+            scores_resp = supabase_client.table('leaderboard_scores').select('*').gte('date', start_date).lte('date', target_date).execute()
+            all_rows = scores_resp.data or []
+
+            # 按用户聚合
+            user_entries = {}
+            for row in all_rows:
+                u = row['username']
+                if u in opted_out or row['date'] not in date_list:
+                    continue
+                if u not in user_entries:
+                    user_entries[u] = []
+                user_entries[u].append(row)
+
+            for username, entries in user_entries.items():
+                if period == 'daily':
+                    for e in entries:
+                        rankings.append({"username": username, "score": e["score"], "meals_count": e.get("meals_count", 0)})
+                else:
+                    avg_score = sum(e["score"] for e in entries) / len(entries)
+                    total_meals = sum(e.get("meals_count", 0) for e in entries)
+                    rankings.append({"username": username, "score": round(avg_score, 1), "meals_count": total_meals, "days": len(entries)})
+
+            rankings.sort(key=lambda x: x["score"], reverse=True)
+            return jsonify({"success": True, "rankings": rankings[:50]})
+        except Exception as e:
+            print(f"Supabase排行榜查询失败: {e}")
+
+    # Fallback: JSON文件
+    scores = load_leaderboard_scores()
+    privacy = load_leaderboard_privacy()
+
     if period == 'daily':
-        # 单日排行
         for username, user_scores in scores.items():
             if not privacy.get(username, True):
                 continue
             if target_date in user_scores:
                 entry = user_scores[target_date]
-                rankings.append({
-                    "username": username,
-                    "score": entry["score"],
-                    "meals_count": entry.get("meals_count", 0)
-                })
+                rankings.append({"username": username, "score": entry["score"], "meals_count": entry.get("meals_count", 0)})
     elif period == 'weekly':
-        # 最近7天平均分数排行
         from datetime import timedelta
         target = datetime.date.fromisoformat(target_date)
         week_dates = [(target - timedelta(days=i)).isoformat() for i in range(7)]
@@ -3396,14 +3541,8 @@ def get_leaderboard():
                 continue
             avg_score = sum(e["score"] for e in week_entries) / len(week_entries)
             total_meals = sum(e.get("meals_count", 0) for e in week_entries)
-            rankings.append({
-                "username": username,
-                "score": round(avg_score, 1),
-                "meals_count": total_meals,
-                "days": len(week_entries)
-            })
+            rankings.append({"username": username, "score": round(avg_score, 1), "meals_count": total_meals, "days": len(week_entries)})
     elif period == 'monthly':
-        # 最近30天平均分数排行
         from datetime import timedelta
         target = datetime.date.fromisoformat(target_date)
         month_dates = [(target - timedelta(days=i)).isoformat() for i in range(30)]
@@ -3415,39 +3554,74 @@ def get_leaderboard():
                 continue
             avg_score = sum(e["score"] for e in month_entries) / len(month_entries)
             total_meals = sum(e.get("meals_count", 0) for e in month_entries)
-            rankings.append({
-                "username": username,
-                "score": round(avg_score, 1),
-                "meals_count": total_meals,
-                "days": len(month_entries)
-            })
+            rankings.append({"username": username, "score": round(avg_score, 1), "meals_count": total_meals, "days": len(month_entries)})
 
-    # 按分数降序排列
     rankings.sort(key=lambda x: x["score"], reverse=True)
-
-    return jsonify({
-        "success": True,
-        "rankings": rankings[:50]
-    })
+    return jsonify({"success": True, "rankings": rankings[:50]})
 
 @app.route('/api/leaderboard/streak', methods=['GET'])
 def get_streak_leaderboard():
     """获取连续打卡天数排行榜（毅力榜）"""
+    rankings = []
+
+    if supabase_client:
+        try:
+            from datetime import timedelta
+            priv_resp = supabase_client.table('leaderboard_privacy').select('username,opted_in').execute()
+            opted_out = {r['username'] for r in (priv_resp.data or []) if not r.get('opted_in', True)}
+
+            today = datetime.date.today()
+            start = (today - timedelta(days=365)).isoformat()
+            end = today.isoformat()
+            scores_resp = supabase_client.table('leaderboard_scores').select('username,date').gte('date', start).lte('date', end).execute()
+            all_rows = scores_resp.data or []
+
+            user_dates = {}
+            for row in all_rows:
+                u = row['username']
+                if u in opted_out:
+                    continue
+                if u not in user_dates:
+                    user_dates[u] = set()
+                user_dates[u].add(row['date'])
+
+            for username, dates_set in user_dates.items():
+                dates = sorted(dates_set, reverse=True)
+                if not dates:
+                    continue
+                streak = 1
+                last_date = datetime.date.fromisoformat(dates[0])
+                if (today - last_date).days > 1:
+                    streak = 0
+                else:
+                    for i in range(1, len(dates)):
+                        curr = datetime.date.fromisoformat(dates[i-1])
+                        prev = datetime.date.fromisoformat(dates[i])
+                        if (curr - prev).days == 1:
+                            streak += 1
+                        else:
+                            break
+                if streak > 0:
+                    rankings.append({"username": username, "streak_days": streak})
+
+            rankings.sort(key=lambda x: x["streak_days"], reverse=True)
+            return jsonify({"success": True, "rankings": rankings[:50]})
+        except Exception as e:
+            print(f"Supabase毅力榜查询失败: {e}")
+
+    # Fallback: JSON文件
     scores = load_leaderboard_scores()
     privacy = load_leaderboard_privacy()
-    rankings = []
 
     for username, user_scores in scores.items():
         if not privacy.get(username, True):
             continue
-        # 计算连续打卡天数
         dates = sorted(user_scores.keys(), reverse=True)
         if not dates:
             continue
         streak = 1
         today = datetime.date.today()
         last_date = datetime.date.fromisoformat(dates[0])
-        # 如果最近一次打卡不是今天或昨天，连续天数为0
         if (today - last_date).days > 1:
             streak = 0
         else:
@@ -3459,10 +3633,7 @@ def get_streak_leaderboard():
                 else:
                     break
         if streak > 0:
-            rankings.append({
-                "username": username,
-                "streak_days": streak
-            })
+            rankings.append({"username": username, "streak_days": streak})
 
     rankings.sort(key=lambda x: x["streak_days"], reverse=True)
     return jsonify({"success": True, "rankings": rankings[:50]})
@@ -3484,6 +3655,17 @@ def set_leaderboard_privacy():
     opted_in = data.get('opted_in', True)
     if not username:
         return jsonify({"success": False, "message": "请提供用户名"}), 400
+    # 优先写入Supabase
+    if supabase_client:
+        try:
+            supabase_client.table('leaderboard_privacy').upsert({
+                'username': username,
+                'opted_in': opted_in
+            }).execute()
+            return jsonify({"success": True, "opted_in": opted_in})
+        except Exception as e:
+            print(f"Supabase保存隐私设置失败: {e}")
+    # Fallback: JSON文件
     privacy = load_leaderboard_privacy()
     privacy[username] = opted_in
     save_leaderboard_privacy(privacy)

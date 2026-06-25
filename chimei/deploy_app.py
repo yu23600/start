@@ -23,6 +23,12 @@ import datetime
 import hashlib
 import secrets
 
+# ========== 启动诊断 ==========
+import inspect as _inspect
+_deploy_file = _inspect.getfile(_inspect.currentframe())
+_deploy_lines = len(open(_deploy_file, 'r', encoding='utf-8').readlines())
+print(f"🔍 [DEPLOY DIAG] file={_deploy_file}, lines={_deploy_lines}, deploy_id=v16-lb-fix-0625")
+
 # ========== Supabase 云数据库 ==========
 SUPABASE_URL = os.environ.get('SUPABASE_URL', '')
 SUPABASE_ANON_KEY = os.environ.get('SUPABASE_ANON_KEY', '')

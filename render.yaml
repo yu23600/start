@@ -1,4 +1,4 @@
-# v16 - 清除__pycache__缓存修复排行榜404
+# v17 - 添加模块级诊断日志，确认实际加载的代码版本
 services:
   - type: web
     name: cafeteria-recommender

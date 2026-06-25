@@ -97,8 +97,8 @@ def is_admin(username):
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 app = Flask(__name__, 
-            template_folder=os.path.join(BASE_DIR, 'web_app', 'templates'),
-            static_folder=os.path.join(BASE_DIR, 'web_app', 'static'))
+            template_folder=os.path.join(BASE_DIR, 'chimei', 'web_app', 'templates'),
+            static_folder=os.path.join(BASE_DIR, 'chimei', 'web_app', 'static'))
 CORS(app)
 
 # ========== 配置 ==========

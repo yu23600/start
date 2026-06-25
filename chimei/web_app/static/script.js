@@ -2146,6 +2146,7 @@ async function startupMealLogin() {
             updateDailyScore(); // 登录后刷新评分仪表
             // 检查是否需要设置目标
             await checkAndShowGoalWizard();
+            showGuideIfNewUser();
             return;
         }
     }
@@ -2157,6 +2158,7 @@ async function startupMealLogin() {
         updateDailyScore(); // 登录后刷新评分仪表
         // 登录后检查是否需要设置目标
         await checkAndShowGoalWizard();
+        showGuideIfNewUser();
     }
 }
 
@@ -3803,5 +3805,115 @@ async function loadPrivacyPreference() {
         }
     } catch (e) {
         console.warn('加载隐私设置失败:', e.message);
+    }
+}
+
+// ========== 使用指南 ==========
+var guideSteps = [
+    {
+        icon: '🏫',
+        title: '选择学校',
+        desc: '首次使用需要选择你的学校，系统会根据学校加载对应的食堂菜品菜单。也可以随时点击「修改学校」更换。'
+    },
+    {
+        icon: '👤',
+        title: '注册 / 登录',
+        desc: '创建一个账号来保存你的饮食记录。支持自动登录，下次打开不用重新输入。可以注册多个账号，随时切换。'
+    },
+    {
+        icon: '',
+        title: '设置饮食目标',
+        desc: '选择你的当前目标：减脂期（控制热量）、增肌期（高蛋白）、保持健康（均衡营养）。目标会影响推荐和评分。'
+    },
+    {
+        icon: '📝',
+        title: '三餐打卡',
+        desc: '每天记录你吃的早、午、晚餐。从菜单中勾选菜品，也可以手动添加。打卡后系统会自动计算饮食评分。'
+    },
+    {
+        icon: '📊',
+        title: '查看评分与报告',
+        desc: '打卡后首页会显示今日饮食评分（0-100分），并给出健康建议。点击「报告」可以查看本周饮食趋势分析。'
+    },
+    {
+        icon: '🏆',
+        title: '排行榜',
+        desc: '打卡后自动参与排行榜！日榜、周榜、月榜和毅力榜（连续打卡天数）四种排行。可以在账号管理中设置是否参与。'
+    },
+    {
+        icon: '🛡️',
+        title: '过敏设置 & BMI',
+        desc: '在下方设置过敏信息，推荐时会避开相关菜品。BMI计算器帮你了解体质指数，辅助饮食目标选择。'
+    }
+];
+
+var currentGuideStep = 0;
+
+function showGuide() {
+    currentGuideStep = 0;
+    renderGuideStep();
+    document.getElementById('guideModal').classList.add('show');
+}
+
+function closeGuide() {
+    document.getElementById('guideModal').classList.remove('show');
+    var user = getMealUser();
+    if (user) {
+        localStorage.setItem('guide_seen_' + user, 'true');
+    }
+}
+
+function renderGuideStep() {
+    var step = guideSteps[currentGuideStep];
+    var body = document.getElementById('guideBody');
+    body.innerHTML = '<div class="guide-step-icon">' + step.icon + '</div>' +
+        '<div class="guide-step-title">' + step.title + '</div>' +
+        '<div class="guide-step-desc">' + step.desc + '</div>';
+
+    // 更新导航点
+    var dotsHtml = '';
+    for (var i = 0; i < guideSteps.length; i++) {
+        dotsHtml += '<div class="guide-dot' + (i === currentGuideStep ? ' active' : '') + '" onclick="goToGuideStep(' + i + ')"></div>';
+    }
+    document.getElementById('guideDots').innerHTML = dotsHtml;
+
+    // 更新按钮文字
+    var prevBtn = document.getElementById('guidePrevBtn');
+    var nextBtn = document.getElementById('guideNextBtn');
+    prevBtn.style.visibility = currentGuideStep === 0 ? 'hidden' : 'visible';
+    if (currentGuideStep === guideSteps.length - 1) {
+        nextBtn.textContent = '知道了 ✓';
+        nextBtn.onclick = closeGuide;
+    } else {
+        nextBtn.textContent = '下一步 ';
+        nextBtn.onclick = guideNext;
+    }
+}
+
+function guideNext() {
+    if (currentGuideStep < guideSteps.length - 1) {
+        currentGuideStep++;
+        renderGuideStep();
+    }
+}
+
+function guidePrev() {
+    if (currentGuideStep > 0) {
+        currentGuideStep--;
+        renderGuideStep();
+    }
+}
+
+function goToGuideStep(index) {
+    currentGuideStep = index;
+    renderGuideStep();
+}
+
+function showGuideIfNewUser() {
+    var user = getMealUser();
+    if (!user) return;
+    var seen = localStorage.getItem('guide_seen_' + user);
+    if (!seen) {
+        setTimeout(function() { showGuide(); }, 800);
     }
 }

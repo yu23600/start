@@ -198,6 +198,7 @@
                 <button onclick="document.getElementById('importFileInput').click()" class="toolbar-btn">📥 导入</button>
                 <button onclick="showGallery()" class="toolbar-btn">🗺️ 图鉴</button>
                 <button onclick="showDevModeDialog()" class="toolbar-btn toolbar-btn-dev" title="开发者模式">🔧 开发者</button>
+                <button onclick="showGuide()" class="toolbar-btn toolbar-btn-info">📖 指南</button>
                 <input type="file" id="importFileInput" accept=".json" style="display:none;" onchange="importData(event)">
             </div>
         </div>
@@ -583,6 +584,24 @@
                 <!-- 排行列表 -->
                 <div id="leaderboardList" class="leaderboard-list">
                     <div style="text-align:center; padding:30px; color:#999;">加载中...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 使用指南弹窗 -->
+        <div id="guideModal" class="modal">
+            <div class="modal-content guide-modal-content">
+                <span class="close-btn" onclick="closeGuide()">&times;</span>
+                <div class="guide-header">
+                    <h2>📖 使用指南</h2>
+                    <div class="guide-dots" id="guideDots"></div>
+                </div>
+                <div class="guide-body" id="guideBody">
+                    <!-- 动态填充 -->
+                </div>
+                <div class="guide-footer">
+                    <button onclick="guidePrev()" class="btn btn-secondary" id="guidePrevBtn">⬅ 上一步</button>
+                    <button onclick="guideNext()" class="btn btn-primary" id="guideNextBtn">下一步 </button>
                 </div>
             </div>
         </div>

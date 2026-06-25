@@ -97,19 +97,19 @@ def is_admin(username):
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 app = Flask(__name__, 
-            template_folder=os.path.join(BASE_DIR, 'web_app', 'templates'),
-            static_folder=os.path.join(BASE_DIR, 'web_app', 'static'))
+            template_folder=os.path.join(BASE_DIR, 'chimei', 'web_app', 'templates'),
+            static_folder=os.path.join(BASE_DIR, 'chimei', 'web_app', 'static'))
 CORS(app)
 
 # ========== 配置 ==========
-DATA_FILE = os.path.join(BASE_DIR, 'cafeteria_data.json')
-USER_TAGS_FILE = os.path.join(BASE_DIR, 'user_dish_tags.json')
-MEAL_LOGS_FILE = os.path.join(BASE_DIR, 'meal_logs.json')
-MEAL_USERS_FILE = os.path.join(BASE_DIR, 'meal_users.json')
-DEV_CONFIG_FILE = os.path.join(BASE_DIR, 'dev_config.json')
-VERSION_FILE = os.path.join(BASE_DIR, 'version.json')
-LEADERBOARD_FILE = os.path.join(BASE_DIR, 'leaderboard_scores.json')
-LEADERBOARD_PRIVACY_FILE = os.path.join(BASE_DIR, 'leaderboard_privacy.json')
+DATA_FILE = os.path.join(BASE_DIR, 'chimei', 'cafeteria_data.json')
+USER_TAGS_FILE = os.path.join(BASE_DIR, 'chimei', 'user_dish_tags.json')
+MEAL_LOGS_FILE = os.path.join(BASE_DIR, 'chimei', 'meal_logs.json')
+MEAL_USERS_FILE = os.path.join(BASE_DIR, 'chimei', 'meal_users.json')
+DEV_CONFIG_FILE = os.path.join(BASE_DIR, 'chimei', 'dev_config.json')
+VERSION_FILE = os.path.join(BASE_DIR, 'chimei', 'version.json')
+LEADERBOARD_FILE = os.path.join(BASE_DIR, 'chimei', 'leaderboard_scores.json')
+LEADERBOARD_PRIVACY_FILE = os.path.join(BASE_DIR, 'chimei', 'leaderboard_privacy.json')
 
 # 开发者模式默认配置
 DEFAULT_DEV_CONFIG = {

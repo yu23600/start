@@ -3363,9 +3363,8 @@ def submit_leaderboard_score():
 
 @app.route('/api/leaderboard', methods=['GET'])
 def get_leaderboard():
-    """获取排行榜（支持日/周/月筛选和学校筛选）"""
+    """获取排行榜（日/周/月，全局排行）"""
     period = request.args.get('period', 'daily')  # daily, weekly, monthly
-    school = request.args.get('school', '').strip()
     target_date = request.args.get('date', datetime.date.today().isoformat())
 
     scores = load_leaderboard_scores()
@@ -3379,13 +3378,10 @@ def get_leaderboard():
                 continue
             if target_date in user_scores:
                 entry = user_scores[target_date]
-                if school and entry.get('school', '') != school:
-                    continue
                 rankings.append({
                     "username": username,
                     "score": entry["score"],
-                    "meals_count": entry.get("meals_count", 0),
-                    "school": entry.get("school", "")
+                    "meals_count": entry.get("meals_count", 0)
                 })
     elif period == 'weekly':
         # 最近7天平均分数排行
@@ -3398,18 +3394,13 @@ def get_leaderboard():
             week_entries = [user_scores[d] for d in week_dates if d in user_scores]
             if not week_entries:
                 continue
-            # 取最近一条记录的学校作为该用户的学校
-            user_school = week_entries[0].get('school', '')
-            if school and user_school != school:
-                continue
             avg_score = sum(e["score"] for e in week_entries) / len(week_entries)
             total_meals = sum(e.get("meals_count", 0) for e in week_entries)
             rankings.append({
                 "username": username,
                 "score": round(avg_score, 1),
                 "meals_count": total_meals,
-                "days": len(week_entries),
-                "school": user_school
+                "days": len(week_entries)
             })
     elif period == 'monthly':
         # 最近30天平均分数排行
@@ -3422,40 +3413,26 @@ def get_leaderboard():
             month_entries = [user_scores[d] for d in month_dates if d in user_scores]
             if not month_entries:
                 continue
-            user_school = month_entries[0].get('school', '')
-            if school and user_school != school:
-                continue
             avg_score = sum(e["score"] for e in month_entries) / len(month_entries)
             total_meals = sum(e.get("meals_count", 0) for e in month_entries)
             rankings.append({
                 "username": username,
                 "score": round(avg_score, 1),
                 "meals_count": total_meals,
-                "days": len(month_entries),
-                "school": user_school
+                "days": len(month_entries)
             })
 
     # 按分数降序排列
     rankings.sort(key=lambda x: x["score"], reverse=True)
 
-    # 收集所有学校列表用于前端筛选
-    all_schools = set()
-    for username, user_scores in scores.items():
-        for date_str, entry in user_scores.items():
-            s = entry.get('school', '')
-            if s:
-                all_schools.add(s)
-
     return jsonify({
         "success": True,
-        "rankings": rankings[:50],
-        "schools": sorted(all_schools)
+        "rankings": rankings[:50]
     })
 
 @app.route('/api/leaderboard/streak', methods=['GET'])
 def get_streak_leaderboard():
     """获取连续打卡天数排行榜（毅力榜）"""
-    school = request.args.get('school', '').strip()
     scores = load_leaderboard_scores()
     privacy = load_leaderboard_privacy()
     rankings = []
@@ -3482,14 +3459,9 @@ def get_streak_leaderboard():
                 else:
                     break
         if streak > 0:
-            # 获取学校信息（取最近一条记录的学校）
-            user_school = user_scores[dates[0]].get('school', '')
-            if school and user_school != school:
-                continue
             rankings.append({
                 "username": username,
-                "streak_days": streak,
-                "school": user_school
+                "streak_days": streak
             })
 
     rankings.sort(key=lambda x: x["streak_days"], reverse=True)

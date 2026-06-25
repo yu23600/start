@@ -3670,7 +3670,6 @@ let currentLeaderboardTab = 'daily';
 async function showLeaderboard() {
     const modal = document.getElementById('leaderboardModal');
     modal.classList.add('show');
-    await populateSchoolFilter();
     await loadPrivacyPreference();
     await loadLeaderboardData();
 }
@@ -3687,39 +3686,18 @@ function switchLeaderboardTab(period) {
     loadLeaderboardData();
 }
 
-async function populateSchoolFilter() {
-    try {
-        const resp = await fetch('/api/leaderboard?period=daily&school=');
-        const data = await resp.json();
-        if (data.schools && data.schools.length > 0) {
-            const select = document.getElementById('leaderboardSchoolFilter');
-            select.innerHTML = '<option value="">全部学校</option>';
-            data.schools.forEach(school => {
-                const opt = document.createElement('option');
-                opt.value = school;
-                opt.textContent = school;
-                if (school === currentSchool) opt.selected = true;
-                select.appendChild(opt);
-            });
-        }
-    } catch (e) {
-        console.warn('获取学校列表失败:', e.message);
-    }
-}
-
 async function loadLeaderboardData() {
     const listEl = document.getElementById('leaderboardList');
     listEl.innerHTML = '<div style="text-align:center;padding:30px;color:#999;">加载中...</div>';
 
-    const school = document.getElementById('leaderboardSchoolFilter').value;
     const user = getMealUser();
 
     try {
         let url;
         if (currentLeaderboardTab === 'streak') {
-            url = '/api/leaderboard/streak?school=' + encodeURIComponent(school);
+            url = '/api/leaderboard/streak';
         } else {
-            url = '/api/leaderboard?period=' + currentLeaderboardTab + '&school=' + encodeURIComponent(school);
+            url = '/api/leaderboard?period=' + currentLeaderboardTab;
         }
 
         const resp = await fetch(url);
@@ -3773,7 +3751,6 @@ function renderLeaderboardList(rankings, currentUser) {
             + '<div class="lb-rank">' + rankDisplay + '</div>'
             + '<div class="lb-info">'
             + '<div class="lb-name">' + escapeHtml(entry.username) + (isMe ? ' (我)' : '') + '</div>'
-            + '<div class="lb-school">' + escapeHtml(entry.school || '未知学校') + '</div>'
             + '</div>'
             + scoreDisplay
             + '</div>';

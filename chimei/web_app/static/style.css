@@ -2697,11 +2697,6 @@ body {
     color: #555;
 }
 
-/* 学校筛选 */
-.leaderboard-filter {
-    margin-bottom: 14px;
-}
-
 /* 排行列表 */
 .leaderboard-list {
     max-height: 50vh;
@@ -2767,15 +2762,6 @@ body {
     overflow: hidden;
     text-overflow: ellipsis;
 }
-.lb-school {
-    font-size: 0.78em;
-    color: #999;
-    margin-top: 2px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
 .lb-score {
     font-weight: 700;
     font-size: 1.1em;

@@ -12,7 +12,7 @@
 - 使用环境变量 PORT（Render 自动注入）
 """
 
-from flask import Flask, render_template, request, jsonify, send_from_directory
+from flask import Flask, render_template, request, jsonify, send_from_directory, session
 from flask_cors import CORS
 import json
 import os
@@ -126,29 +126,10 @@ if SUPABASE_URL and SUPABASE_ANON_KEY:
     migrate_supabase()
 
 
-# ========== 管理员配置 ==========
-ADMIN_USERNAMES = ['nick3448450113', 'yu']  # 预设管理员账号列表
-
-def is_admin(username):
-    """检查用户是否为管理员"""
-    if not username:
-        return False
-    # 硬编码检查
-    if username in ADMIN_USERNAMES:
-        return True
-    # 数据库检查
-    if supabase_client:
-        try:
-            resp = supabase_client.table('meal_users').select('role').eq('username', username).execute()
-            if resp.data and len(resp.data) > 0:
-                return resp.data[0].get('role') == 'admin'
-        except:
-            pass
-    # 本地 JSON 检查
-    users = load_meal_users()
-    if username in users:
-        return users[username].get('role') == 'admin'
-    return False
+# ========== 管理员验证（开发者密码） ==========
+def is_admin(username=None):
+    """检查是否已通过开发者密码验证（唯一管理员手段）"""
+    return session.get('dev_verified', False)
 
 
 # ========== 基础路径配置 ==========
@@ -158,6 +139,7 @@ app = Flask(__name__,
             template_folder=os.path.join(BASE_DIR, 'chimei', 'web_app', 'templates'),
             static_folder=os.path.join(BASE_DIR, 'chimei', 'web_app', 'static'))
 CORS(app)
+app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'chimei-dev-2026')
 
 # ========== 配置 ==========
 DATA_FILE = os.path.join(BASE_DIR, 'chimei', 'cafeteria_data.json')
@@ -2288,7 +2270,7 @@ def register_meal_user():
 
     pw_hash, salt = hash_password(password)
     # 检查是否为预设管理员
-    role = 'admin' if username in ADMIN_USERNAMES else 'user'
+    role = 'user'
     users[username] = {
         "password_hash": pw_hash,
         "salt": salt,
@@ -2321,8 +2303,7 @@ def login_meal_user():
     if not verify_password(password, user.get('password_hash', ''), user.get('salt', '')):
         return jsonify({"success": False, "message": "密码错误"}), 401
 
-    # 检查是否为管理员（硬编码或数据库）
-    role = 'admin' if is_admin(username) else user.get('role', 'user')
+    role = user.get('role', 'user')
 
     return jsonify({
         "success": True, 
@@ -2391,7 +2372,7 @@ def admin_reset_menu():
     username = data.get('username', '').strip()
     school_name = data.get('school_name', '').strip()
     
-    if not username or not is_admin(username):
+    if not is_admin():
         return jsonify({"success": False, "message": "需要管理员权限"}), 403
     if not school_name:
         return jsonify({"success": False, "message": "学校名称不能为空"}), 400
@@ -2440,7 +2421,7 @@ def admin_clear_menu():
     username = data.get('username', '').strip()
     school_name = data.get('school_name', '').strip()
     
-    if not username or not is_admin(username):
+    if not is_admin():
         return jsonify({"success": False, "message": "需要管理员权限"}), 403
     if not school_name:
         return jsonify({"success": False, "message": "学校名称不能为空"}), 400
@@ -2479,7 +2460,7 @@ def admin_edit_menu():
     school_name = data.get('school_name', '').strip()
     menu = data.get('menu', '')
     
-    if not username or not is_admin(username):
+    if not is_admin():
         return jsonify({"success": False, "message": "需要管理员权限"}), 403
     if not school_name:
         return jsonify({"success": False, "message": "学校名称不能为空"}), 400
@@ -2522,7 +2503,7 @@ def admin_edit_menu():
 def admin_get_users():
     """管理员获取所有用户列表"""
     username = request.args.get('username', '').strip()
-    if not username or not is_admin(username):
+    if not is_admin():
         return jsonify({"success": False, "message": "需要管理员权限"}), 403
     
     users = load_meal_users()
@@ -2556,7 +2537,7 @@ def admin_delete_user(target_username):
     data = request.json or {}
     username = data.get('username', '').strip()
     
-    if not username or not is_admin(username):
+    if not is_admin():
         return jsonify({"success": False, "message": "需要管理员权限"}), 403
     if not target_username:
         return jsonify({"success": False, "message": "目标用户不能为空"}), 400
@@ -2581,65 +2562,11 @@ def admin_delete_user(target_username):
     })
 
 
-@app.route('/api/admin/add', methods=['POST'])
-def admin_add_admin():
-    """添加管理员"""
-    data = request.json or {}
-    username = data.get('username', '').strip()
-    target_username = data.get('target_username', '').strip()
-    
-    if not username or not is_admin(username):
-        return jsonify({"success": False, "message": "需要管理员权限"}), 403
-    if not target_username:
-        return jsonify({"success": False, "message": "目标用户不能为空"}), 400
-    
-    users = load_meal_users()
-    if target_username not in users:
-        return jsonify({"success": False, "message": "用户不存在"}), 404
-    
-    users[target_username]['role'] = 'admin'
-    if target_username not in ADMIN_USERNAMES:
-        ADMIN_USERNAMES.append(target_username)
-    
-    if save_meal_users(users):
-        return jsonify({"success": True, "message": f"已将「{target_username}」设为管理员"})
-    else:
-        return jsonify({"success": False, "message": "保存失败"}), 500
-
-
-@app.route('/api/admin/remove', methods=['POST'])
-def admin_remove_admin():
-    """移除管理员权限"""
-    data = request.json or {}
-    username = data.get('username', '').strip()
-    target_username = data.get('target_username', '').strip()
-    
-    if not username or not is_admin(username):
-        return jsonify({"success": False, "message": "需要管理员权限"}), 403
-    if not target_username:
-        return jsonify({"success": False, "message": "目标用户不能为空"}), 400
-    if target_username == username:
-        return jsonify({"success": False, "message": "不能移除自己的管理员权限"}), 400
-    
-    users = load_meal_users()
-    if target_username not in users:
-        return jsonify({"success": False, "message": "用户不存在"}), 404
-    
-    users[target_username]['role'] = 'user'
-    if target_username in ADMIN_USERNAMES:
-        ADMIN_USERNAMES.remove(target_username)
-    
-    if save_meal_users(users):
-        return jsonify({"success": True, "message": f"已移除「{target_username}」的管理员权限"})
-    else:
-        return jsonify({"success": False, "message": "保存失败"}), 500
-
-
 @app.route('/api/admin/stats', methods=['GET'])
 def admin_get_stats():
     """获取系统统计"""
     username = request.args.get('username', '').strip()
-    if not username or not is_admin(username):
+    if not is_admin():
         return jsonify({"success": False, "message": "需要管理员权限"}), 403
     
     db_data = load_all_data()
@@ -2660,7 +2587,7 @@ def admin_get_stats():
         "stats": {
             "school_count": len(db_data),
             "user_count": len(users),
-            "admin_count": sum(1 for u in users.values() if u.get('role') == 'admin' or u.get('username', '') in ADMIN_USERNAMES),
+            "admin_count": sum(1 for u in users.values() if u.get('role') == 'admin'),
             "total_meal_logs": total_meals,
             "total_dishes_logged": total_dishes,
             "dish_tags_count": len(user_tags)
@@ -3305,6 +3232,7 @@ def dev_verify():
     password = data.get('password', '').strip()
     config = load_dev_config()
     if password == config.get('password', ''):
+        session['dev_verified'] = True
         return jsonify({"success": True, "message": "验证成功"})
     return jsonify({"success": False, "message": "密码错误"}), 403
 

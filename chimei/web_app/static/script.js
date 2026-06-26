@@ -3343,8 +3343,6 @@ async function submitChangePassword() {
 function showAdminPanel() {
     const modal = document.getElementById('adminModal');
     modal.classList.add('show');
-    const user = getMealUser();
-    document.getElementById('adminUsernameDisplay').textContent = user ? user : '';
     switchAdminTab('menu');
 }
 
@@ -3370,8 +3368,6 @@ function switchAdminTab(tabName) {
         loadAdminMenus();
     } else if (tabName === 'users') {
         loadAdminUsers();
-    } else if (tabName === 'admins') {
-        loadAdminAdmins();
     } else if (tabName === 'stats') {
         loadAdminStats();
     }
@@ -3517,100 +3513,6 @@ async function adminDeleteUser(username) {
         if (data.success) {
             showNotification(data.message, 'success');
             loadAdminUsers();
-        } else {
-            showNotification(data.message, 'error');
-        }
-    } catch (e) {
-        showNotification('操作失败', 'error');
-    }
-}
-
-async function loadAdminAdmins() {
-    const container = document.getElementById('adminAdminList');
-    container.innerHTML = '<div style="text-align:center; padding:20px; color:#999;">加载中...</div>';
-    
-    const user = getMealUser();
-    if (!user) return;
-    
-    try {
-        const resp = await fetch(`/api/admin/users?username=${encodeURIComponent(user.username)}`);
-        const data = await resp.json();
-        
-        if (data.success) {
-            const admins = data.users.filter(u => u.role === 'admin');
-            if (admins.length > 0) {
-                let html = '';
-                for (const u of admins) {
-                    html += `
-                        <div class="admin-user-item">
-                            <div class="admin-user-info">
-                                <div class="admin-user-name">${u.username} <span class="role-badge admin">管理员</span></div>
-                            </div>
-                            <div class="admin-user-actions">
-                                ${u.username !== user.username ? `<button onclick="adminRemoveAdmin('${u.username}')" class="btn btn-small btn-warning">移除</button>` : '<span style="color:#999;font-size:0.85em;">(自己)</span>'}
-                            </div>
-                        </div>
-                    `;
-                }
-                container.innerHTML = html;
-            } else {
-                container.innerHTML = '<div style="text-align:center; padding:20px; color:#999;">暂无管理员</div>';
-            }
-        }
-    } catch (e) {
-        container.innerHTML = '<div style="text-align:center; padding:20px; color:#e74c3c;">加载失败</div>';
-    }
-}
-
-async function adminAddAdmin() {
-    const input = document.getElementById('addAdminUsername');
-    const targetUsername = input.value.trim();
-    
-    if (!targetUsername) {
-        showNotification('请输入用户名', 'warning');
-        return;
-    }
-    
-    const user = getMealUser();
-    if (!user) return;
-    
-    try {
-        const resp = await fetch('/api/admin/add', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username: user.username, target_username: targetUsername })
-        });
-        const data = await resp.json();
-        
-        if (data.success) {
-            showNotification(data.message, 'success');
-            input.value = '';
-            loadAdminAdmins();
-        } else {
-            showNotification(data.message, 'error');
-        }
-    } catch (e) {
-        showNotification('操作失败', 'error');
-    }
-}
-
-async function adminRemoveAdmin(username) {
-    if (!confirm(`确定要移除「${username}」的管理员权限吗？`)) return;
-    
-    const user = getMealUser();
-    if (!user) return;
-    
-    try {
-        const resp = await fetch('/api/admin/remove', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username: user.username, target_username: username })
-        });
-        const data = await resp.json();
-        
-        if (data.success) {
-            showNotification(data.message, 'success');
-            loadAdminAdmins();
         } else {
             showNotification(data.message, 'error');
         }

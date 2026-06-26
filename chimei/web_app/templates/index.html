@@ -525,13 +525,12 @@
             <div class="modal-content admin-modal-content">
                 <span class="close-btn" onclick="closeAdminPanel()">&times;</span>
                 <h2 style="text-align:center; margin-bottom: 5px;">⚙️ 管理员面板</h2>
-                <p style="text-align:center; color:#999; margin-bottom: 20px; font-size:0.9em;">当前管理员：<span id="adminUsernameDisplay"></span></p>
+                <p style="text-align:center; color:#999; margin-bottom: 20px; font-size:0.9em;">开发者模式已激活</p>
                 
                 <!-- 标签页导航 -->
                 <div class="admin-tabs">
-                    <button class="admin-tab active" onclick="switchAdminTab('menu')">📋 菜单管理</button>
+                    <button class="admin-tab active" onclick="switchAdminTab('menu')"> 菜单管理</button>
                     <button class="admin-tab" onclick="switchAdminTab('users')">👥 用户管理</button>
-                    <button class="admin-tab" onclick="switchAdminTab('admins')">🔑 管理员</button>
                     <button class="admin-tab" onclick="switchAdminTab('stats')">📊 统计</button>
                 </div>
                 
@@ -545,17 +544,6 @@
                 <!-- 用户管理标签页 -->
                 <div id="adminTabUsers" class="admin-tab-content">
                     <div id="adminUserList" class="admin-user-list">
-                        <div style="text-align:center; padding:20px; color:#999;">加载中...</div>
-                    </div>
-                </div>
-                
-                <!-- 管理员管理标签页 -->
-                <div id="adminTabAdmins" class="admin-tab-content">
-                    <div class="admin-add-admin-form">
-                        <input type="text" id="addAdminUsername" class="form-control" placeholder="输入要设为管理员的用户名">
-                        <button onclick="adminAddAdmin()" class="btn btn-primary btn-small">添加管理员</button>
-                    </div>
-                    <div id="adminAdminList" class="admin-user-list" style="margin-top:15px;">
                         <div style="text-align:center; padding:20px; color:#999;">加载中...</div>
                     </div>
                 </div>

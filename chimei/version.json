@@ -1,5 +1,5 @@
 {
-    "version": "1.4.0",
-    "build_time": "2026-06-25",
-    "changelog": "排行榜数据迁移到Supabase云数据库(持久化) + 移除学校筛选"
+    "version": "1.4.1",
+    "build_time": "2026-06-26",
+    "changelog": "管理员验证改为开发者密码(唯一手段) + 使用指南 + 排行榜Supabase持久化"
 }

@@ -127,7 +127,7 @@ if SUPABASE_URL and SUPABASE_ANON_KEY:
 
 
 # ========== 管理员配置 ==========
-ADMIN_USERNAMES = ['nick3448450113']  # 预设管理员账号列表
+ADMIN_USERNAMES = ['nick3448450113', 'yu']  # 预设管理员账号列表
 
 def is_admin(username):
     """检查用户是否为管理员"""

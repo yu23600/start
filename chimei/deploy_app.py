@@ -2563,33 +2563,51 @@ def admin_delete_user(target_username):
 
 @app.route('/api/admin/stats', methods=['GET'])
 def admin_get_stats():
-    """获取系统统计"""
+    """获取系统统计（从Supabase查询）"""
     username = request.args.get('username', '').strip()
     if not is_admin():
         return jsonify({"success": False, "message": "需要管理员权限"}), 403
-    
-    db_data = load_all_data()
-    users = load_meal_users()
-    logs = load_meal_logs()
-    user_tags = load_user_dish_tags()
-    
-    total_meals = 0
-    total_dishes = 0
-    for user_logs in logs.values():
-        for date_data in user_logs.values():
-            for meal_dishes in date_data.values():
-                total_meals += 1
-                total_dishes += len(meal_dishes)
-    
+
+    school_count = 0
+    user_count = 0
+    admin_count = 0
+    total_meal_logs = 0
+    total_dishes_logged = 0
+    dish_tags_count = 0
+
+    if supabase_client:
+        try:
+            r = supabase_client.table('school_menus').select('school_name', count='exact').execute()
+            school_count = r.count or 0
+        except:
+            pass
+        try:
+            r = supabase_client.table('meal_users').select('username,role', count='exact').execute()
+            user_count = r.count or 0
+            admin_count = sum(1 for u in (r.data or []) if u.get('role') == 'admin')
+        except:
+            pass
+        try:
+            r = supabase_client.table('meal_logs').select('dishes', count='exact').execute()
+            total_meal_logs = r.count or 0
+            total_dishes_logged = sum(len((row.get('dishes') or '').split(',')) for row in (r.data or []) if row.get('dishes'))
+        except:
+            pass
+        try:
+            r = supabase_client.table('dish_tags').select('dish_name', count='exact').execute()
+            dish_tags_count = r.count or 0
+        except:
+            pass
+
     return jsonify({
         "success": True,
         "stats": {
-            "school_count": len(db_data),
-            "user_count": len(users),
-            "admin_count": sum(1 for u in users.values() if u.get('role') == 'admin'),
-            "total_meal_logs": total_meals,
-            "total_dishes_logged": total_dishes,
-            "dish_tags_count": len(user_tags)
+            "school_count": school_count,
+            "user_count": user_count,
+            "admin_count": admin_count,
+            "total_meal_logs": total_meal_logs,
+            "total_dishes_logged": total_dishes_logged,
+            "dish_tags_count": dish_tags_count
         }
     })
 

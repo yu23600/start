@@ -543,11 +543,6 @@ def save_meal_users(users):
                     "salt": info.get('salt', ''),
                     "created_at": info.get('created_at', datetime.datetime.now().isoformat()),
                 }
-                # 只添加表中实际存在的可选列
-                if 'goal' in info:
-                    row['goal'] = info['goal']
-                if 'role' in info:
-                    row['role'] = info['role']
                 rows.append(row)
             if rows:
                 supabase_client.table('meal_users').upsert(rows, on_conflict='username').execute()

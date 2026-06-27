@@ -537,13 +537,18 @@ def save_meal_users(users):
         try:
             rows = []
             for username, info in users.items():
-                rows.append({
+                row = {
                     "username": username,
                     "password_hash": info.get('password_hash', ''),
                     "salt": info.get('salt', ''),
                     "created_at": info.get('created_at', datetime.datetime.now().isoformat()),
-                    "goal": info.get('goal', '')
-                })
+                }
+                # 只添加表中实际存在的可选列
+                if 'goal' in info:
+                    row['goal'] = info['goal']
+                if 'role' in info:
+                    row['role'] = info['role']
+                rows.append(row)
             if rows:
                 supabase_client.table('meal_users').upsert(rows, on_conflict='username').execute()
             return True
@@ -2585,8 +2590,13 @@ def admin_get_stats():
             r = supabase_client.table('meal_users').select('username,role', count='exact').execute()
             user_count = r.count or 0
             admin_count = sum(1 for u in (r.data or []) if u.get('role') == 'admin')
-        except:
-            pass
+        except Exception:
+            # role 列可能不存在，尝试只查 username
+            try:
+                r = supabase_client.table('meal_users').select('username', count='exact').execute()
+                user_count = r.count or 0
+            except:
+                pass
         try:
             r = supabase_client.table('meal_logs').select('dishes', count='exact').execute()
             total_meal_logs = r.count or 0
